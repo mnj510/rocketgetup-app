@@ -41,7 +41,7 @@ jobs:
           EOF
         
 
-      - name: Build and export static site
+      - name: Build static site (output: export)
         run: npm run export
 
       - name: Upload artifact
