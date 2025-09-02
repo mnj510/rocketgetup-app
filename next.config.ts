@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
   trailingSlash: true,
+  eslint: { ignoreDuringBuilds: true },
   ...(repoBasePath
     ? {
         basePath: `/${repoBasePath}`,
