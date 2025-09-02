@@ -69,7 +69,7 @@ export default function AppShell({ children }: AppShellProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <header className="bg-white shadow-sm border-b">
+      <header className="bg-white shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <h1 className="text-xl font-semibold text-gray-900">행동모임 새벽 기상</h1>
@@ -90,7 +90,7 @@ export default function AppShell({ children }: AppShellProps) {
 
       <div className="flex">
         {/* 사이드바 */}
-        <aside className={`${sideOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static lg:inset-0 z-50 lg:z-auto lg:w-64 bg-white shadow-lg lg:shadow-none transition-transform duration-300 ease-in-out lg:transition-none`}>
+        <aside className={`${sideOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static lg:inset-0 z-50 lg:z-auto lg:w-64 bg-white shadow-xl transition-transform duration-300 ease-in-out lg:transition-none`}>
           <div className="h-full flex flex-col">
             <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
               <nav className="space-y-1">
