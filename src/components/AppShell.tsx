@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { supabaseClient } from "@/lib/supabase";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -31,8 +32,13 @@ export default function AppShell({ children }: AppShellProps) {
 
   const getMemberName = async (code: string) => {
     try {
-      // Supabase에서 멤버 이름 가져오기
-      const { data, error } = await fetch(`/api/members/${code}`).then(res => res.json());
+      // Supabase에서 직접 멤버 이름 가져오기
+      const { data, error } = await supabaseClient
+        .from('members')
+        .select('name')
+        .eq('code', code)
+        .single();
+      
       if (!error && data) {
         setMemberName(data.name);
       }

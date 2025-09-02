@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getMustRecord, saveMustRecord } from "@/lib/supabase-utils";
+import { supabaseClient } from "@/lib/supabase";
 
 export default function MustWritePage() {
   const router = useRouter();
@@ -27,7 +28,13 @@ export default function MustWritePage() {
 
   const getMemberName = async (code: string) => {
     try {
-      const { data, error } = await fetch(`/api/members/${code}`).then(res => res.json());
+      // Supabase에서 직접 멤버 이름 가져오기
+      const { data, error } = await supabaseClient
+        .from('members')
+        .select('name')
+        .eq('code', code)
+        .single();
+      
       if (!error && data) {
         setMemberName(data.name);
       }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getMembers, getMonthlyStats } from "@/lib/supabase-utils";
+import { supabaseClient } from "@/lib/supabase";
 
 interface Member {
   id: string;
@@ -51,7 +52,13 @@ export default function DashboardPage() {
 
   const getMemberName = async (code: string) => {
     try {
-      const { data, error } = await fetch(`/api/members/${code}`).then(res => res.json());
+      // Supabase에서 직접 멤버 이름 가져오기
+      const { data, error } = await supabaseClient
+        .from('members')
+        .select('name')
+        .eq('code', code)
+        .single();
+      
       if (!error && data) {
         setMemberName(data.name);
       }
