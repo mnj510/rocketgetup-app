@@ -318,9 +318,9 @@ export default function DashboardPage() {
       {!isAdmin && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">{getMonthName(currentMonth)}</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">오늘</h3>
             <p className="text-3xl font-bold text-indigo-600">
-              {memberStats.find(s => s.member.code === memberCode)?.total || 0}일
+              {new Date().getMonth() + 1} / {new Date().getDate()}
             </p>
           </div>
           
