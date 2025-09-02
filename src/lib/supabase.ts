@@ -21,3 +21,4 @@ export const supabaseClient = createClient<Database>(
 );
 
 
+

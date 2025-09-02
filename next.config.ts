@@ -6,10 +6,18 @@ import type { NextConfig } from "next";
 // basePath: `/${repo}`,
 // assetPrefix: `/${repo}/`,
 
+const repoBasePath = process.env.GH_PAGES_BASEPATH;
+
 const nextConfig: NextConfig = {
   output: "export",
   images: { unoptimized: true },
-  trailingSlash: true
+  trailingSlash: true,
+  ...(repoBasePath
+    ? {
+        basePath: `/${repoBasePath}`,
+        assetPrefix: `/${repoBasePath}/`,
+      }
+    : {}),
 };
 
 export default nextConfig;
