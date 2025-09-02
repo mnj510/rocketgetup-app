@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { redirect } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 function formatYMD(d: Date) {
   const y = d.getFullYear();
@@ -10,10 +10,12 @@ function formatYMD(d: Date) {
 }
 
 export default function MustAdminOrWrite() {
+  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [members, setMembers] = useState<Array<{ name: string; code: string }>>([]);
   const [selectedCode, setSelectedCode] = useState<string>("");
   const [date, setDate] = useState(new Date());
+  const [record, setRecord] = useState<any | null>(null);
 
   useEffect(() => {
     const admin = localStorage.getItem("is_admin") === "1";
@@ -28,17 +30,21 @@ export default function MustAdminOrWrite() {
     } catch {}
   }, []);
 
-  const record = useMemo(() => {
-    const key = `must:${selectedCode || localStorage.getItem('member_code') || 'guest'}:${formatYMD(date)}`;
-    const raw = typeof window !== 'undefined' ? localStorage.getItem(key) : null;
-    if (!raw) return null;
-    try { return JSON.parse(raw); } catch { return null; }
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const codeFromStorage = window.localStorage.getItem("member_code") || "guest";
+    const effectiveCode = selectedCode || codeFromStorage;
+    const key = `must:${effectiveCode}:${formatYMD(date)}`;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) { setRecord(null); return; }
+    try { setRecord(JSON.parse(raw)); } catch { setRecord(null); }
   }, [selectedCode, date]);
 
-  if (!isAdmin) {
-    // 일반 멤버는 첫 화면을 작성 화면으로 고정
-    redirect("/must/write");
-  }
+  useEffect(() => {
+    if (!isAdmin) {
+      router.replace("/must/write");
+    }
+  }, [isAdmin, router]);
 
   return (
     <div className="space-y-6">
