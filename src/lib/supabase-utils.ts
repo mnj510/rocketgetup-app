@@ -13,26 +13,54 @@ export async function getMembers() {
 
 export async function addMember(code: string, name: string, isAdmin: boolean = false) {
   try {
-    console.log("Supabase 연결 정보:", {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-    });
+    console.log("🔧 멤버 추가 시작:", { code, name, isAdmin });
     
+    // Supabase 클라이언트 상태 확인
+    if (!supabaseClient) {
+      throw new Error("Supabase 클라이언트가 초기화되지 않았습니다.");
+    }
+    
+    // 테이블 존재 확인
+    const { data: tableCheck, error: tableError } = await supabaseClient
+      .from('app.members')
+      .select('id')
+      .limit(1);
+    
+    if (tableError) {
+      console.error("❌ 테이블 접근 오류:", tableError);
+      throw new Error(`테이블 접근 실패: ${tableError.message}`);
+    }
+    
+    console.log("✅ 테이블 접근 성공");
+    
+    // 멤버 추가
     const { data, error } = await supabaseClient
       .from('app.members')
-      .insert([{ code, name, is_admin: isAdmin }])
+      .insert([{ 
+        code: code.trim(), 
+        name: name.trim(), 
+        is_admin: isAdmin 
+      }])
       .select()
       .single();
     
     if (error) {
-      console.error("Supabase 오류:", error);
-      throw error;
+      console.error("❌ Supabase INSERT 오류:", error);
+      
+      // 중복 코드 오류 처리
+      if (error.code === '23505') {
+        throw new Error("이미 존재하는 멤버 코드입니다.");
+      }
+      
+      // 기타 오류
+      throw new Error(`데이터베이스 오류: ${error.message}`);
     }
     
-    console.log("멤버 추가 성공:", data);
+    console.log("✅ 멤버 추가 성공:", data);
     return data;
+    
   } catch (error) {
-    console.error("addMember 함수 오류:", error);
+    console.error("❌ addMember 함수 오류:", error);
     throw error;
   }
 }
