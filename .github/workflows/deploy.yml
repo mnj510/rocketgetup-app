@@ -40,8 +40,7 @@ jobs:
           GH_PAGES_BASEPATH=${{ vars.GH_PAGES_BASEPATH }}
           EOF
         
-
-      - name: Build static site (output: export)
+      - name: Build static site (output = export)
         run: npm run export
 
       - name: Upload artifact
