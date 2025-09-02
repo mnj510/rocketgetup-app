@@ -20,20 +20,27 @@ export async function addMember(code: string, name: string, isAdmin: boolean = f
       throw new Error("Supabase 클라이언트가 초기화되지 않았습니다.");
     }
     
-    // 테이블 존재 확인
-    const { data: tableCheck, error: tableError } = await supabaseClient
-      .from('members')
-      .select('id')
-      .limit(1);
+    console.log("🔧 Supabase 클라이언트 확인됨");
     
-    if (tableError) {
-      console.error("❌ 테이블 접근 오류:", tableError);
-      throw new Error(`테이블 접근 실패: ${tableError.message}`);
+    // 간단한 연결 테스트
+    const testUrl = "https://vrrerrvcywqarirnxptr.supabase.co/rest/v1/members?select=id&limit=1";
+    console.log("🔧 테스트 URL:", testUrl);
+    
+    // 직접 fetch로 테스트
+    const testResponse = await fetch(testUrl, {
+      headers: {
+        'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZycmVycnZjeXdxYXJscm54cHRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MTY5MzIsImV4cCI6MjA3MjM5MjkzMn0.eUB3YqdAzeLaiwcsSd3Zn_jTUTNRgEMCeTvSG7Wuqso',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZycmVycnZjeXdxYXJscm54cHRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MTY5MzIsImV4cCI6MjA3MjM5MjkzMn0.eUB3YqdAzeLaiwcsSd3Zn_jTUTNRgEMCeTvSG7Wuqso'
+      }
+    });
+    
+    if (!testResponse.ok) {
+      throw new Error(`테스트 요청 실패: ${testResponse.status} ${testResponse.statusText}`);
     }
     
-    console.log("✅ 테이블 접근 성공");
+    console.log("✅ 직접 fetch 테스트 성공:", testResponse.status);
     
-    // 멤버 추가
+    // Supabase 클라이언트로 실제 멤버 추가
     const { data, error } = await supabaseClient
       .from('members')
       .insert([{ 
