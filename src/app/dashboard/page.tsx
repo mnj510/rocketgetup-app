@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getMembers, getMonthlyStats, getWakeupLogs, getMustRecord } from "@/lib/supabase-utils";
 import { supabaseClient } from "@/lib/supabase";
@@ -21,6 +21,13 @@ interface MemberStats {
   score: number;
 }
 
+interface DailyStatus {
+  date: string;
+  wakeup: 'success' | 'fail' | null;
+  must: boolean;
+  frog: boolean;
+}
+
 interface MemberScore {
   name: string;
   code: string;
@@ -37,8 +44,8 @@ export default function DashboardPage() {
   const [memberStats, setMemberStats] = useState<MemberStats[]>([]);
   const [memberScores, setMemberScores] = useState<MemberScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [dailyStatuses, setDailyStatuses] = useState<Record<string, DailyStatus>>({});
 
   useEffect(() => {
     const code = localStorage.getItem("member_code");
@@ -59,6 +66,13 @@ export default function DashboardPage() {
     loadDashboardData();
   }, [router]);
 
+  // 월 변경 시에만 데이터 로드
+  useEffect(() => {
+    if (members.length > 0) {
+      loadMonthData();
+    }
+  }, [selectedDate, members]);
+
   const getMemberName = async (code: string) => {
     try {
       const { data, error } = await supabaseClient
@@ -72,6 +86,58 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error("멤버 이름 가져오기 실패:", error);
+    }
+  };
+
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true);
+      
+      // 모든 멤버 가져오기 (한 번만)
+      const allMembers = await getMembers();
+      setMembers(allMembers);
+      
+      // 현재 월 데이터 로드
+      await loadMonthData();
+      
+    } catch (error) {
+      console.error("대시보드 데이터 로드 실패:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMonthData = async () => {
+    try {
+      const year = selectedDate.getFullYear();
+      const month = selectedDate.getMonth() + 1;
+      
+      // 각 멤버의 통계 및 점수 계산
+      const stats = await Promise.all(
+        members.map(async (member) => {
+          const stats = await getMonthlyStats(member.code, year, month);
+          const score = await calculateMemberScore(member.code, year, month);
+          
+          return {
+            member,
+            ...stats,
+            score
+          };
+        })
+      );
+      
+      setMemberStats(stats);
+      
+      // 일별 상태 로드 (현재 사용자)
+      if (memberCode) {
+        await loadDailyStatuses(memberCode, year, month);
+      }
+      
+      // 멤버별 점수 순위 계산
+      calculateMemberScores(stats);
+      
+    } catch (error) {
+      console.error("월별 데이터 로드 실패:", error);
     }
   };
 
@@ -113,7 +179,7 @@ export default function DashboardPage() {
     }
   };
 
-  const calculateMemberScores = (stats: MemberStats[]) => {
+  const calculateMemberScores = useCallback((stats: MemberStats[]) => {
     const scores: MemberScore[] = stats.map(stat => ({
       name: stat.member.name,
       code: stat.member.code,
@@ -137,39 +203,44 @@ export default function DashboardPage() {
     });
     
     setMemberScores(scores);
-  };
+  }, []);
 
-  const loadDashboardData = async () => {
+  const loadDailyStatuses = async (code: string, year: number, month: number) => {
     try {
-      setIsLoading(true);
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const statuses: Record<string, DailyStatus> = {};
       
-      // 모든 멤버 가져오기
-      const allMembers = await getMembers();
-      setMembers(allMembers);
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // 기상 체크 상태
+        const wakeupLogs = await getWakeupLogs(code, year, month);
+        let wakeupStatus: 'success' | 'fail' | null = null;
+        if (wakeupLogs && wakeupLogs.length > 0) {
+          const log = wakeupLogs.find(l => l.date === date);
+          if (log) {
+            wakeupStatus = log.status;
+          }
+        }
+        
+        // MUST 작성 상태
+        const mustRecord = await getMustRecord(code, date);
+        const mustCompleted = !!(mustRecord && mustRecord.priorities && mustRecord.priorities.some((p: string) => p.trim()));
+        
+        // 개구리 완료 상태
+        const frogCompleted = !!(mustRecord && mustRecord.frogs && mustRecord.frogs.some((f: string) => f.trim()));
+        
+        statuses[date] = {
+          date,
+          wakeup: wakeupStatus,
+          must: mustCompleted,
+          frog: frogCompleted
+        };
+      }
       
-      // 각 멤버의 통계 및 점수 계산
-      const stats = await Promise.all(
-        allMembers.map(async (member) => {
-          const stats = await getMonthlyStats(member.code, currentYear, currentMonth);
-          const score = await calculateMemberScore(member.code, currentYear, currentMonth);
-          
-          return {
-            member,
-            ...stats,
-            score
-          };
-        })
-      );
-      
-      setMemberStats(stats);
-      
-      // 멤버별 점수 순위 계산
-      calculateMemberScores(stats);
-      
+      setDailyStatuses(statuses);
     } catch (error) {
-      console.error("대시보드 데이터 로드 실패:", error);
-    } finally {
-      setIsLoading(false);
+      console.error("일별 상태 로드 실패:", error);
     }
   };
 
@@ -180,6 +251,37 @@ export default function DashboardPage() {
     ];
     return monthNames[month - 1];
   };
+
+  const getDayOfWeek = (date: string) => {
+    const dayNames = ["일", "월", "화", "수", "목", "금", "토"];
+    const day = new Date(date).getDay();
+    return dayNames[day];
+  };
+
+  const isFutureDate = (date: string) => {
+    const today = new Date();
+    const targetDate = new Date(date);
+    return targetDate > today;
+  };
+
+  const getMemberDailyStatus = (memberCode: string, date: string) => {
+    // 실제 구현에서는 해당 멤버의 해당 날짜 상태를 가져와야 함
+    // 현재는 임시로 랜덤 상태 반환
+    const random = Math.random();
+    if (random > 0.7) return 'success';
+    if (random > 0.4) return 'fail';
+    return null;
+  };
+
+  const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const [year, month] = e.target.value.split('-').map(Number);
+    setSelectedDate(new Date(year, month - 1, 1));
+  };
+
+  // 현재 월 정보 계산
+  const currentYear = selectedDate.getFullYear();
+  const currentMonth = selectedDate.getMonth() + 1;
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
   if (isLoading) {
     return (
@@ -194,9 +296,19 @@ export default function DashboardPage() {
     <div className="space-y-6">
       {/* 헤더 */}
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          {isAdmin ? "관리자 대시보드" : `${memberName || memberCode}님의 대시보드`}
-        </h1>
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold text-gray-900">
+            {isAdmin ? "관리자 대시보드" : `${memberName || memberCode}님의 대시보드`}
+          </h1>
+          <div className="flex items-center space-x-4">
+            <input
+              type="month"
+              value={`${currentYear}-${String(currentMonth).padStart(2, '0')}`}
+              onChange={handleMonthChange}
+              className="px-3 py-2 border border-gray-300 rounded-md"
+            />
+          </div>
+        </div>
         <p className="text-gray-600">
           {currentYear}년 {getMonthName(currentMonth)} 기상 현황
         </p>
@@ -235,61 +347,129 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* 멤버별 기상 현황 테이블 */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
+      {/* 1. 내 월별 기상 현황 (멤버만) */}
+      {!isAdmin && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">
+            내 월별 기상 현황 ({currentYear}년 {getMonthName(currentMonth)})
+          </h2>
+          
+          {/* 요일 헤더 */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {["일", "월", "화", "수", "목", "금", "토"].map(day => (
+              <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+          
+          {/* 달력 그리드 */}
+          <div className="grid grid-cols-7 gap-1">
+            {Array.from({ length: daysInMonth }, (_, i) => {
+              const day = i + 1;
+              const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+              const status = dailyStatuses[date];
+              const isFuture = isFutureDate(date);
+              
+              return (
+                <div key={day} className="relative">
+                  <div className={`h-12 flex items-center justify-center rounded-md text-sm font-medium ${
+                    isFuture ? 'bg-gray-100 border border-gray-300' : 
+                    status?.wakeup === 'success' ? 'bg-blue-500 text-white' :
+                    status?.wakeup === 'fail' ? 'bg-red-500 text-white' :
+                    'bg-gray-200 text-gray-700'
+                  }`}>
+                    {day}
+                  </div>
+                  
+                  {/* 점수 표시 */}
+                  {status && !isFuture && (
+                    <div className="absolute -top-1 -right-1 text-xs bg-yellow-400 text-black rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                      {(status.wakeup ? 1 : 0) + (status.must ? 1 : 0) + (status.frog ? 1 : 0)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          
+          <div className="mt-4 text-sm text-gray-600">
+            <span className="inline-block w-4 h-4 bg-blue-500 rounded mr-2"></span> 기상 성공
+            <span className="inline-block w-4 h-4 bg-red-500 rounded ml-4 mr-2"></span> 기상 실패
+            <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미완료
+            <span className="inline-block w-5 h-5 bg-yellow-400 rounded ml-4 mr-2"></span> 일일 점수
+          </div>
+        </div>
+      )}
+
+      {/* 2. 멤버별 기상 현황 (좌측 멤버 목록 + 상단 요일/날짜) */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-800">
             {currentYear}년 {getMonthName(currentMonth)} 멤버별 기상 현황
           </h2>
         </div>
+        
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="w-full text-sm">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  멤버
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  기상 성공
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  기상 실패
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  기상률
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  총 점수
-                </th>
+                <th className="text-left w-36 align-bottom pb-2">멤버</th>
+                {Array.from({ length: daysInMonth }, (_, i) => {
+                  const day = i + 1;
+                  const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                  const dayOfWeek = getDayOfWeek(date);
+                  
+                  return (
+                    <th key={day} className="px-1 text-center align-bottom whitespace-nowrap">
+                      <div className="text-gray-500 text-xs">{dayOfWeek}</div>
+                      <div className="font-medium">{day}</div>
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {memberStats.map((stat) => (
-                <tr key={stat.member.id} className={stat.member.code === memberCode ? 'bg-blue-50' : ''}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                    {stat.member.name}
-                    {stat.member.code === memberCode && <span className="ml-2 text-blue-600">(나)</span>}
+            <tbody>
+              {members.map((member) => (
+                <tr key={member.id} className={member.code === memberCode ? 'bg-blue-50' : ''}>
+                  <td className="py-2 pr-2 font-medium whitespace-nowrap">
+                    {member.name}
+                    {member.code === memberCode && <span className="ml-2 text-blue-600">(나)</span>}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {stat.success}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {stat.fail}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {stat.rate}%
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-purple-600">
-                    {stat.score}점
-                  </td>
+                  {Array.from({ length: daysInMonth }, (_, i) => {
+                    const day = i + 1;
+                    const date = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const isFuture = isFutureDate(date);
+                    const status = getMemberDailyStatus(member.code, date);
+                    
+                    return (
+                      <td key={day} className="px-1 text-center">
+                        {isFuture ? (
+                          <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
+                        ) : status === 'success' ? (
+                          <span className="inline-block h-4 w-4 rounded bg-blue-500"></span>
+                        ) : status === 'fail' ? (
+                          <span className="inline-block h-4 w-4 rounded bg-red-500"></span>
+                        ) : (
+                          <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <span className="inline-block w-4 h-4 bg-blue-500 rounded mr-2"></span> 기상 성공
+          <span className="inline-block w-4 h-4 bg-red-500 rounded ml-4 mr-2"></span> 기상 실패
+          <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미완료
+        </div>
       </div>
 
-      {/* 멤버별 점수 순위 */}
+      {/* 3. 멤버별 점수 순위 */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-800 mb-4">
           멤버별 점수 순위 ({currentYear}년 {getMonthName(currentMonth)})
