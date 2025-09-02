@@ -8,10 +8,10 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean }> = [
+const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; adminLabel?: string }> = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/wakeup", label: "기상 체크" },
-  { href: "/must", label: "MUST 작성" },
+  { href: "/must", label: "MUST 작성", adminLabel: "MUST 관리" },
   { href: "/admin", label: "관리", adminOnly: true },
 ];
 
@@ -49,6 +49,22 @@ export function AppShell({ children }: AppShellProps) {
     router.push("/");
   }
 
+  // 관리자일 때 MUST 메뉴 링크 변경
+  const getMenuLink = (item: typeof MENU_ITEMS[0]) => {
+    if (item.href === "/must" && isAdmin) {
+      return "/admin/must";
+    }
+    return item.href;
+  };
+
+  // 관리자일 때 메뉴 라벨 변경
+  const getMenuLabel = (item: typeof MENU_ITEMS[0]) => {
+    if (item.href === "/must" && isAdmin && item.adminLabel) {
+      return item.adminLabel;
+    }
+    return item.label;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="sticky top-0 z-40 bg-white/90 backdrop-blur shadow-sm">
@@ -66,12 +82,12 @@ export function AppShell({ children }: AppShellProps) {
         <aside className={`sticky self-start top-[64px] h-[calc(100vh-64px)] w-60 bg-white shadow-md p-4 rounded-xl`}>
           <nav className="space-y-1">
             {MENU_ITEMS.filter((m) => (m.adminOnly ? isAdmin : true)).map((m) => {
-              const active = pathname === m.href;
+              const active = pathname === getMenuLink(m);
               return (
-                <Link key={m.href} href={m.href} className={`block rounded px-3 py-2 ${active ? "bg-indigo-50 text-indigo-700 font-medium" : "hover:bg-gray-100"}`}
+                <Link key={m.href} href={getMenuLink(m)} className={`block rounded px-3 py-2 ${active ? "bg-indigo-50 text-indigo-700 font-medium" : "hover:bg-gray-100"}`}
                   onClick={() => setSideOpen(false)}
                 >
-                  {m.label}
+                  {getMenuLabel(m)}
                 </Link>
               );
             })}

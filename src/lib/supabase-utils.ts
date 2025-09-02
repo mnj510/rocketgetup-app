@@ -12,14 +12,29 @@ export async function getMembers() {
 }
 
 export async function addMember(code: string, name: string, isAdmin: boolean = false) {
-  const { data, error } = await supabaseClient
-    .from('app.members')
-    .insert([{ code, name, is_admin: isAdmin }])
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
+  try {
+    console.log("Supabase 연결 정보:", {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    });
+    
+    const { data, error } = await supabaseClient
+      .from('app.members')
+      .insert([{ code, name, is_admin: isAdmin }])
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Supabase 오류:", error);
+      throw error;
+    }
+    
+    console.log("멤버 추가 성공:", data);
+    return data;
+  } catch (error) {
+    console.error("addMember 함수 오류:", error);
+    throw error;
+  }
 }
 
 // 기상 기록 관련 함수
