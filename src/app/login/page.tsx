@@ -38,7 +38,8 @@ export default function LoginPage() {
       if (adminId.trim() !== validId || adminPw !== validPw) {
         throw new Error("관리자 아이디 또는 비밀번호가 올바르지 않습니다");
       }
-      localStorage.setItem("is_admin", "1");
+      localStorage.setItem("is_admin", "true");
+      localStorage.removeItem("member_code");
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message ?? "관리자 로그인 실패");

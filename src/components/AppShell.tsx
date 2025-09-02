@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase";
 
 interface AppShellProps {
@@ -15,6 +15,7 @@ export default function AppShell({ children }: AppShellProps) {
   const [memberCode, setMemberCode] = useState("");
   const [memberName, setMemberName] = useState("");
   const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     // localStorage에서 사용자 정보 가져오기
@@ -24,8 +25,8 @@ export default function AppShell({ children }: AppShellProps) {
     setIsAdmin(storedIsAdmin);
     setMemberCode(storedMemberCode);
 
-    // 멤버 이름 가져오기
-    if (storedMemberCode) {
+    // 멤버 이름 가져오기 (관리자가 아닐 때만)
+    if (storedMemberCode && !storedIsAdmin) {
       getMemberName(storedMemberCode);
     }
   }, []);
@@ -50,7 +51,7 @@ export default function AppShell({ children }: AppShellProps) {
   const handleLogout = () => {
     localStorage.removeItem("is_admin");
     localStorage.removeItem("member_code");
-    window.location.href = "/login";
+    router.push("/login");
   };
 
   const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean }> = [
@@ -75,7 +76,7 @@ export default function AppShell({ children }: AppShellProps) {
             <h1 className="text-xl font-semibold text-gray-900">행동모임 새벽 기상</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">
-                {memberName || memberCode}
+                {isAdmin ? "관리자" : (memberName || memberCode)}
               </span>
               <button
                 onClick={handleLogout}
