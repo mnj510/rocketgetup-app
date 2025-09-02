@@ -39,7 +39,27 @@ export async function addMember(code: string, name: string, isAdmin: boolean = f
     
     console.log("🔧 Supabase 클라이언트 확인됨");
     
+    // 연결 테스트 - 간단한 쿼리로
+    console.log("🔧 연결 테스트 시작...");
+    try {
+      const testResult = await supabaseClient
+        .from('members')
+        .select('id')
+        .limit(1);
+      
+      if (testResult.error) {
+        console.error("❌ 연결 테스트 실패:", testResult.error);
+        throw new Error(`연결 테스트 실패: ${testResult.error.message}`);
+      }
+      
+      console.log("✅ 연결 테스트 성공");
+    } catch (testError) {
+      console.error("❌ 연결 테스트 중 오류:", testError);
+      throw new Error(`연결 테스트 중 오류: ${testError}`);
+    }
+    
     // 멤버 추가
+    console.log("🔧 멤버 추가 쿼리 실행...");
     const { data, error } = await supabaseClient
       .from('members')
       .insert([{ 
