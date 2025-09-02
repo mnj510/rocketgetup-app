@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getMembers, addMember } from "@/lib/supabase-utils";
+import { supabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 
 interface Member {
@@ -23,7 +24,7 @@ export default function AdminPage() {
   useEffect(() => {
     // 관리자 권한 확인
     if (typeof window !== "undefined") {
-      const admin = localStorage.getItem("is_admin") === "1";
+      const admin = localStorage.getItem("is_admin") === "true";
       setIsAdmin(admin);
       if (!admin) {
         window.location.href = "/dashboard";
@@ -73,6 +74,32 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteMember = async (memberId: string, memberName: string) => {
+    if (!confirm(`정말로 "${memberName}" 멤버를 삭제하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { error } = await supabaseClient
+        .from('members')
+        .delete()
+        .eq('id', memberId);
+      
+      if (error) {
+        throw error;
+      }
+      
+      setMessage(`"${memberName}" 멤버가 삭제되었습니다.`);
+      await loadMembers(); // 목록 새로고침
+    } catch (error: any) {
+      console.error("멤버 삭제 실패:", error);
+      setMessage("멤버 삭제에 실패했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -87,8 +114,8 @@ export default function AdminPage() {
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">관리자 페이지</h1>
-        <p className="text-gray-600">멤버 관리 및 시스템 설정</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">멤버 관리</h1>
+        <p className="text-gray-600">새 멤버 추가 및 기존 멤버 관리</p>
       </div>
 
       {/* 관리 메뉴 */}
@@ -189,6 +216,9 @@ export default function AdminPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     가입일
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    작업
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -211,6 +241,17 @@ export default function AdminPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(member.created_at).toLocaleDateString("ko-KR")}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {!member.is_admin && (
+                        <button
+                          onClick={() => handleDeleteMember(member.id, member.name)}
+                          disabled={loading}
+                          className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                        >
+                          삭제
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

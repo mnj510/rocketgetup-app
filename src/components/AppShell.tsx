@@ -56,9 +56,10 @@ export default function AppShell({ children }: AppShellProps) {
 
   const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean }> = [
     { href: "/dashboard", label: "대시보드" },
-    { href: "/wakeup", label: "기상 체크" },
+    { href: "/wakeup", label: "기상 체크", memberOnly: true },
     { href: "/must", label: "MUST 작성", memberOnly: true },
-    { href: "/admin", label: "관리", adminOnly: true },
+    { href: "/admin", label: "멤버 추가", adminOnly: true },
+    { href: "/admin/must", label: "MUST 관리", adminOnly: true },
   ];
 
   const filteredMenuItems = MENU_ITEMS.filter((item) => {
