@@ -2,150 +2,98 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { getMembers, getWakeupLogs, getMustRecord } from "@/lib/supabase-utils";
 
 type DayStatus = "success" | "fail" | "none";
 
-interface Member {
-  id: string;
-  code: string;
+interface MemberRow {
   name: string;
-  is_admin: boolean;
+  week: DayStatus[]; // length 7
 }
 
-interface WakeupLog {
-  id: string;
-  member_code: string;
-  date: string;
-  status: 'success' | 'fail';
-}
-
-interface MustRecord {
-  id: string;
-  member_code: string;
-  date: string;
-  priorities: string[];
-  frogs: string[];
-  retro: string;
+// 임시 더미 데이터: 추후 Supabase 데이터로 대체
+function useDummyMonthlyStatuses(): Record<string, DayStatus> {
+  const today = new Date();
+  const days = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const statuses: Record<string, DayStatus> = {};
+  for (let d = 1; d <= days; d += 1) {
+    statuses[String(d)] = Math.random() > 0.5 ? "success" : "fail";
+  }
+  return statuses;
 }
 
 export default function DashboardPage() {
   const [name, setName] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [memberCode, setMemberCode] = useState<string>("");
+  // 점수 섹션은 달력 형태로 바꿉니다(이전/다음 버튼 제거)
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [members, setMembers] = useState<Member[]>([]);
-  const [wakeupLogs, setWakeupLogs] = useState<WakeupLog[]>([]);
-  const [loading, setLoading] = useState(true);
-
   const minSelectable = useMemo(() => new Date(2025, 8, 1), []); // 2025-09-01
   const currentMonthLabel = useMemo(() => selectedDate.toLocaleString("ko", { month: "long" }), [selectedDate]);
+  const statuses = useDummyMonthlyStatuses();
 
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        setLoading(true);
-        
-        // 로컬 스토리지에서 사용자 정보 가져오기
-        const code = localStorage.getItem("member_code");
-        const admin = localStorage.getItem("is_admin") === "1";
-        
-        setMemberCode(code || "");
-        setIsAdmin(admin);
-        
-        if (admin) {
-          setName("관리자");
-        } else if (code) {
-          // 멤버 이름 설정
-          const membersRaw = localStorage.getItem("members");
-          if (membersRaw) {
-            try {
-              const memberList = JSON.parse(membersRaw) as Array<{ name: string; code: string }>;
-              const found = memberList.find((m) => m.code === code);
-              setName(found ? found.name : `멤버(${code})`);
-            } catch {
-              setName(`멤버(${code})`);
-            }
-          } else {
-            setName(`멤버(${code})`);
-          }
-        } else {
-          setName("게스트");
+    const code = localStorage.getItem("member_code");
+    setMemberCode(code || "");
+    const admin = localStorage.getItem("is_admin") === "1";
+    setIsAdmin(admin);
+    if (admin) {
+      setName("관리자");
+    } else if (code) {
+      // 코드→이름 매핑
+      const membersRaw = localStorage.getItem("members");
+      if (membersRaw) {
+        try {
+          const list = JSON.parse(membersRaw) as Array<{ name: string; code: string }>;
+          const found = list.find((m) => m.code === code);
+          setName(found ? found.name : `멤버(${code})`);
+        } catch {
+          setName(`멤버(${code})`);
         }
-
-        // Supabase에서 데이터 로드
-        await loadSupabaseData();
-      } catch (error) {
-        console.error("데이터 초기화 실패:", error);
-      } finally {
-        setLoading(false);
+      } else {
+        setName(`멤버(${code})`);
       }
-    };
-
-    initializeData();
+    } else {
+      setName("게스트");
+    }
   }, []);
 
-  const loadSupabaseData = async () => {
-    try {
-      // 멤버 목록 로드
-      const membersData = await getMembers();
-      setMembers(membersData);
-      
-      // 로컬 스토리지에 멤버 정보 저장 (기존 코드와의 호환성)
-      localStorage.setItem("members", JSON.stringify(membersData));
-      
-      // 기상 로그 로드
-      if (memberCode) {
-        const logs = await getWakeupLogs(
-          memberCode, 
-          selectedDate.getFullYear(), 
-          selectedDate.getMonth() + 1
-        );
-        setWakeupLogs(logs);
+  const calendar = useMemo(() => {
+    const base = new Date(selectedDate);
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    const days = new Date(year, month + 1, 0).getDate();
+    return new Array(days).fill(null).map((_, i) => {
+      const day = i + 1;
+      const state = statuses[String(day)] ?? "none";
+      const color = state === "success" ? "bg-blue-500" : state === "fail" ? "bg-red-500" : "bg-gray-200";
+      return (
+        <div key={day} className={`h-10 flex items-center justify-center rounded text-white ${color}`}>
+          {day}
+        </div>
+      );
+    });
+  }, [statuses, selectedDate]);
+
+  // 멤버별 주간 현황(데모): 임시 5명 × 7일 랜덤
+  const weeklyBoard: MemberRow[] = useMemo(() => {
+    // 멤버 목록은 로컬스토리지의 members를 사용(관리자 페이지에서 추가됨)
+    let names = ["민수", "지영", "현우", "소라", "태훈"];
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("members");
+        if (raw) {
+          const list = JSON.parse(raw) as Array<{ name: string; code: string }>;
+          if (list.length > 0) names = list.map((m) => m.name);
+        }
+      } catch {
+        // ignore
       }
-    } catch (error) {
-      console.error("Supabase 데이터 로드 실패:", error);
     }
-  };
-
-  // 월간 통계 계산
-  const monthlyStats = useMemo(() => {
-    if (!memberCode) return { success: 0, fail: 0, rate: 0 };
-    
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth() + 1;
-    const logs = wakeupLogs.filter(log => {
-      const logDate = new Date(log.date);
-      return logDate.getFullYear() === year && logDate.getMonth() + 1 === month;
-    });
-    
-    const success = logs.filter(log => log.status === 'success').length;
-    const fail = logs.filter(log => log.status === 'fail').length;
-    const total = success + fail;
-    const rate = total === 0 ? 0 : Math.round((success / total) * 100);
-    
-    return { success, fail, total, rate };
-  }, [memberCode, selectedDate, wakeupLogs]);
-
-  // 관리자 월간 통계
-  const adminMonthStats = useMemo(() => {
-    if (!isAdmin) return { success: 0, fail: 0, successPct: 0, failPct: 0 };
-    
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth() + 1;
-    const logs = wakeupLogs.filter(log => {
-      const logDate = new Date(log.date);
-      return logDate.getFullYear() === year && logDate.getMonth() + 1 === month;
-    });
-    
-    const success = logs.filter(log => log.status === 'success').length;
-    const fail = logs.filter(log => log.status === 'fail').length;
-    const total = success + fail;
-    const successPct = total === 0 ? 0 : Math.round((success / total) * 100);
-    const failPct = total === 0 ? 0 : 100 - successPct;
-    
-    return { success, fail, successPct, failPct };
-  }, [isAdmin, selectedDate, wakeupLogs]);
+    return names.map((n) => ({
+      name: n,
+      week: new Array(7).fill(null).map(() => (Math.random() > 0.5 ? "success" : "fail")),
+    }));
+  }, []);
 
   // 월간 일수/요일 헤더 생성
   const monthMeta = useMemo(() => {
@@ -161,43 +109,95 @@ export default function DashboardPage() {
     return { year: y, month: m + 1, days, headers };
   }, [selectedDate]);
 
-  // 멤버별 월간 현황
+  // 멤버 x 날짜 랜덤 현황(데모)
   const memberMonthGrid = useMemo(() => {
-    return members.map((member) => ({
-      name: member.name,
-      code: member.code,
+    const today = new Date();
+    const membersRaw = typeof window !== 'undefined' ? localStorage.getItem('members') : null;
+    const noHistoryMode = !!membersRaw; // 멤버를 새로 추가한 경우: 기록 없음 → 전부 빈칸
+    return weeklyBoard.map((row) => ({
+      name: row.name,
       days: new Array(monthMeta.days).fill(null).map((_, i) => {
-        const ymd = `${monthMeta.year}-${String(monthMeta.month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-        const log = wakeupLogs.find(l => l.member_code === member.code && l.date === ymd);
-        return log ? log.status : 'none';
+        const d = new Date(monthMeta.year, monthMeta.month - 1, i + 1);
+        if (noHistoryMode) return "none" as DayStatus; // 기록 없음
+        // 미래 날짜는 빈칸 표시
+        if (d > today) return "none" as DayStatus;
+        return Math.random() > 0.5 ? ("success" as DayStatus) : ("fail" as DayStatus);
       }),
     }));
-  }, [members, monthMeta, wakeupLogs]);
+  }, [weeklyBoard, monthMeta.days, monthMeta.month, monthMeta.year]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-          <div className="mt-4 text-gray-600">로딩 중...</div>
-        </div>
-      </div>
-    );
-  }
+  const [adminQuery, setAdminQuery] = useState("");
+  const monthlyScores = useMemo(() => {
+    // 점수는 LocalStorage에 누적된 MUST/WAKE 기반으로 계산
+    const membersRaw = typeof window !== 'undefined' ? localStorage.getItem('members') : null;
+    const memberList: Array<{ name: string; code: string }> = (() => {
+      if (!membersRaw) return [];
+      try { return JSON.parse(membersRaw); } catch { return []; }
+    })();
+    const ym = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth()+1).padStart(2,'0')}`;
+    const rows = memberList.map((m) => {
+      const key = `score:${m.code}:${ym}`;
+      let scoreObj: any = { must: 0, wake: 0 };
+      try { const raw = localStorage.getItem(key); if (raw) scoreObj = JSON.parse(raw); } catch {}
+      const total = (scoreObj.must || 0) + (scoreObj.wake || 0);
+      return { name: m.name, code: m.code, score: total };
+    });
+    const sorted = rows.sort((a, b) => b.score - a.score);
+    let prevScore: number | null = null;
+    let prevRank = 0;
+    sorted.forEach((r, i) => {
+      const rank = prevScore !== null && r.score === prevScore ? prevRank : i + 1;
+      (r as any).rank = rank;
+      prevScore = r.score;
+      prevRank = rank;
+    });
+    return sorted as Array<typeof rows[number] & { rank: number }>;
+  }, [selectedDate]);
+
+  const adminMonthStats = useMemo(() => {
+    if (!isAdmin) return { success: 0, fail: 0, successPct: 0, failPct: 0 };
+    const membersRaw = typeof window !== 'undefined' ? localStorage.getItem('members') : null;
+    let members: Array<{ name: string; code: string }> = [];
+    try { if (membersRaw) members = JSON.parse(membersRaw); } catch {}
+    let succ = 0;
+    let fail = 0;
+    for (const m of members) {
+      for (let i = 0; i < monthMeta.days; i++) {
+        const ymd = `${monthMeta.year}-${String(monthMeta.month).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+        const k = `wake:${m.code}:${ymd}`;
+        const raw = typeof window !== 'undefined' ? localStorage.getItem(k) : null;
+        if (raw) {
+          try {
+            const rec = JSON.parse(raw);
+            if (rec.status === 'success') succ += 1;
+            if (rec.status === 'fail') fail += 1;
+          } catch {}
+        }
+      }
+    }
+    const total = succ + fail;
+    const successPct = total === 0 ? 0 : Math.round((succ / total) * 100);
+    const failPct = total === 0 ? 0 : 100 - successPct;
+    return { success: succ, fail, successPct, failPct };
+  }, [isAdmin, monthMeta.days, monthMeta.month, monthMeta.year]);
 
   return (
-    <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4 lg:mb-0">
-          대시보드 - {name}
-        </h1>
+    <div className="max-w-5xl mx-auto py-8 space-y-8">
+      <div className="flex items-center justify-between">
+        <h1 className="page-title">대시보드 - {name}</h1>
         <div className="flex flex-col sm:flex-row gap-3">
           <Link href="/wakeup" className="btn-primary text-center">
             기상 체크
           </Link>
-          <Link href="/must/write" className="btn-gradient text-center">
-            MUST 작성
-          </Link>
+          {isAdmin ? (
+            <Link href="/admin/must" className="btn-gradient text-center">
+              MUST 관리
+            </Link>
+          ) : (
+            <Link href="/must/write" className="btn-gradient text-center">
+              MUST 작성
+            </Link>
+          )}
           {isAdmin && (
             <Link href="/admin" className="btn-primary text-center">
               관리
@@ -206,8 +206,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 통계 카드 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div className="grid md:grid-cols-3 gap-6">
         <div className="gradient-box p-6 rounded-2xl flex items-center justify-center">
           <div className="text-center">
             <div className="text-2xl opacity-90">이번 달</div>
@@ -216,110 +215,87 @@ export default function DashboardPage() {
         </div>
         <div className="gradient-box p-6 rounded-2xl flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl opacity-90">
-              {isAdmin ? '기상 성공률' : '기상 성공'}
-            </div>
-            <div className="text-5xl font-extrabold mt-1">
-              {isAdmin ? `${adminMonthStats.successPct}%` : monthlyStats.success}
-            </div>
+            <div className="text-2xl opacity-90">{isAdmin ? '기상 성공률' : '기상 완료'}</div>
+            <div className="text-5xl font-extrabold mt-1">{isAdmin ? `${adminMonthStats.successPct}%` : '3'}</div>
           </div>
         </div>
         <div className="gradient-box p-6 rounded-2xl flex items-center justify-center">
           <div className="text-center">
-            <div className="text-2xl opacity-90">
-              {isAdmin ? '기상 실패률' : '기상률'}
-            </div>
-            <div className="text-5xl font-extrabold mt-1">
-              {isAdmin ? `${adminMonthStats.failPct}%` : `${monthlyStats.rate}%`}
-            </div>
-            {!isAdmin && (
-              <div className="mt-1 text-sm text-gray-100/80">
-                성공/실패 {monthlyStats.success}/{monthlyStats.fail}
-              </div>
-            )}
+            <div className="text-2xl opacity-90">{isAdmin ? '기상 실패률' : '기상 실패'}</div>
+            <div className="text-5xl font-extrabold mt-1">{isAdmin ? `${adminMonthStats.failPct}%` : '2'}</div>
           </div>
         </div>
       </div>
 
       {/* 내 월별 현황 (관리자는 숨김) */}
-      {!isAdmin && memberCode && (
-        <section className="card card-padding rounded-2xl mb-8">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-            <h2 className="font-semibold text-lg mb-3 sm:mb-0">
-              내 월별 기상 현황 ({currentMonthLabel})
-            </h2>
-            <input
-              type="month"
-              className="rounded border px-3 py-2 w-full sm:w-auto"
-              value={`${monthMeta.year}-${String(monthMeta.month).padStart(2, '0')}`}
-              min={`2025-09`}
-              onChange={(e) => {
-                const [yy, mm] = e.target.value.split('-').map(Number);
-                const next = new Date(yy, (mm || 1) - 1, 1);
-                if (next < minSelectable) {
-                  setSelectedDate(minSelectable);
-                } else {
-                  setSelectedDate(next);
-                }
-              }}
-            />
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr>
-                  {monthMeta.headers.map((h) => (
-                    <th key={h.day} className="px-1 text-center align-bottom whitespace-nowrap">
-                      <div className="text-gray-500">{h.weekday}</div>
-                      <div className="font-medium">{h.day}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  {(() => {
-                    const days = new Array(monthMeta.days).fill(null).map((_, i) => {
-                      const ymd = `${monthMeta.year}-${String(monthMeta.month).padStart(2, '0')}-${String(i + 1).padStart(2, '0')}`;
-                      const log = wakeupLogs.find(l => l.member_code === memberCode && l.date === ymd);
-                      return log ? log.status : 'none';
-                    });
-                    
-                    return days.map((state, idx) => (
-                      <td key={idx} className="px-1 text-center">
-                        {state === 'none' ? (
-                          <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
-                        ) : (
-                          <span className={`inline-block h-4 w-4 rounded ${
-                            state === 'success' ? 'bg-blue-500' : 'bg-red-500'
-                          }`}></span>
-                        )}
-                      </td>
-                    ));
-                  })()}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <p className="text-sm text-gray-600 mt-3">
-            이번 달 나의 기상 완료: <span className="text-blue-600 font-semibold">{monthlyStats.success}</span>회 / 
-            실패: <span className="text-red-600 font-semibold">{monthlyStats.fail}</span>회
-          </p>
-        </section>
+      {!isAdmin && (
+      <section className="card card-padding rounded-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">내 월별 기상 현황 ({currentMonthLabel})</h2>
+          <input
+            type="month"
+            className="rounded border px-3 py-2"
+            value={`${monthMeta.year}-${String(monthMeta.month).padStart(2, '0')}`}
+            min={`2025-09`}
+            onChange={(e) => {
+              const [yy, mm] = e.target.value.split('-').map(Number);
+              const next = new Date(yy, (mm || 1) - 1, 1);
+              if (next < minSelectable) {
+                setSelectedDate(minSelectable);
+              } else {
+                setSelectedDate(next);
+              }
+            }}
+          />
+        </div>
+        {(() => {
+          const self = memberMonthGrid.find((r) => r.name === name) || memberMonthGrid[0];
+          const successCnt = self.days.filter((d) => d === 'success').length;
+          const failCnt = self.days.filter((d) => d === 'fail').length;
+          return (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr>
+                      {monthMeta.headers.map((h) => (
+                        <th key={h.day} className="px-1 text-center align-bottom whitespace-nowrap">
+                          <div className="text-gray-500">{h.weekday}</div>
+                          <div className="font-medium">{h.day}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      {self.days.map((state, idx) => (
+                        <td key={idx} className="px-1 text-center">
+                          {state === 'none' ? (
+                            <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
+                          ) : (
+                            <span className={`inline-block h-4 w-4 rounded ${state === 'success' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-sm text-gray-600 mt-3">이번 달 나의 기상 완료: <span className="text-blue-600 font-semibold">{successCnt}</span>회 / 실패: <span className="text-red-600 font-semibold">{failCnt}</span>회</p>
+            </>
+          );
+        })()}
+      </section>
       )}
 
-      {/* 멤버별 월간 현황 */}
-      <section className="card card-padding rounded-2xl mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
-          <h2 className="font-semibold text-lg mb-3 sm:mb-0">
-            {currentMonthLabel} 멤버별 기상 현황
-          </h2>
+      {/* 멤버별 월간 현황 (달력으로 월 변경 가능) */}
+      <section className="card card-padding rounded-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">{currentMonthLabel} 멤버별 기상 현황</h2>
           {isAdmin && (
             <input
               type="month"
-              className="rounded border px-3 py-2 w-full sm:w-auto"
+              className="rounded border px-3 py-2"
               value={`${monthMeta.year}-${String(monthMeta.month).padStart(2, '0')}`}
               min={`2025-09`}
               onChange={(e) => {
@@ -334,7 +310,6 @@ export default function DashboardPage() {
             />
           )}
         </div>
-        
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -357,9 +332,7 @@ export default function DashboardPage() {
                       {state === 'none' ? (
                         <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
                       ) : (
-                        <span className={`inline-block h-4 w-4 rounded ${
-                          state === 'success' ? 'bg-blue-500' : 'bg-red-500'
-                        }`}></span>
+                        <span className={`inline-block h-4 w-4 rounded ${state === 'success' ? 'bg-blue-500' : 'bg-red-500'}`}></span>
                       )}
                     </td>
                   ))}
@@ -368,16 +341,101 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
-        
         <p className="text-sm text-gray-600 mt-3">파랑: 성공, 빨강: 실패</p>
       </section>
 
+      
+
+      {isAdmin && (
+        <section className="card card-padding rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold">관리자: 월별 멤버 검색</h2>
+            <input className="rounded border px-3 py-2" placeholder="멤버 이름 검색" value={adminQuery} onChange={(e) => setAdminQuery(e.target.value)} />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="text-left w-36 align-bottom">멤버</th>
+                  {monthMeta.headers.map((h) => (
+                    <th key={h.day} className="px-1 text-center align-bottom whitespace-nowrap">
+                      <div className="text-gray-500">{h.weekday}</div>
+                      <div className="font-medium">{h.day}</div>
+                    </th>
+                  ))}
+                  <th className="text-center w-28">완료%</th>
+                  <th className="text-center w-28">실패%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {memberMonthGrid
+                  .filter((m) => (adminQuery ? m.name.includes(adminQuery) : true))
+                  .map((row) => {
+                    const membersRaw = typeof window !== 'undefined' ? localStorage.getItem('members') : null;
+                    let code = '';
+                    if (membersRaw) {
+                      try {
+                        const list = JSON.parse(membersRaw) as Array<{ name: string; code: string }>;
+                        const f = list.find((m) => m.name === row.name);
+                        code = f?.code || '';
+                      } catch {}
+                    }
+                    let success = 0;
+                    let fail = 0;
+                    for (let i = 0; i < monthMeta.days; i++) {
+                      const ymd = `${monthMeta.year}-${String(monthMeta.month).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`;
+                      const k = `wake:${code}:${ymd}`;
+                      const raw = typeof window !== 'undefined' ? localStorage.getItem(k) : null;
+                      if (raw) {
+                        try {
+                          const rec = JSON.parse(raw);
+                          if (rec.status === 'success') success += 1;
+                          if (rec.status === 'fail') fail += 1;
+                        } catch {}
+                      }
+                    }
+                    const total = success + fail;
+                    const successPct = total === 0 ? 0 : Math.round((success / total) * 100);
+                    const failPct = total === 0 ? 0 : 100 - successPct;
+                    return (
+                      <tr key={row.name}>
+                        <td className="py-2 pr-2 font-medium whitespace-nowrap">{row.name}</td>
+                        {new Array(monthMeta.days).fill(null).map((_, idx) => {
+                          const ymd = `${monthMeta.year}-${String(monthMeta.month).padStart(2,'0')}-${String(idx+1).padStart(2,'0')}`;
+                          const k = `wake:${code}:${ymd}`;
+                          const raw = typeof window !== 'undefined' ? localStorage.getItem(k) : null;
+                          if (!raw) {
+                            return (
+                              <td key={idx} className="px-1 text-center">
+                                <span className="inline-block h-4 w-4 rounded border border-gray-300 bg-transparent"></span>
+                              </td>
+                            );
+                          }
+                          let state: 'success' | 'fail' | 'none' = 'none';
+                          try { const rec = JSON.parse(raw!); state = rec.status; } catch {}
+                          return (
+                            <td key={idx} className="px-1 text-center">
+                              <span className={`inline-block h-4 w-4 rounded ${state === 'success' ? 'bg-blue-500' : state === 'fail' ? 'bg-red-500' : 'border border-gray-300 bg-transparent'}`}></span>
+                            </td>
+                          );
+                        })}
+                        <td className="text-center text-blue-600 font-semibold">{successPct}%</td>
+                        <td className="text-center text-red-600 font-semibold">{failPct}%</td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-sm text-gray-600 mt-3">검색은 부분 일치로 동작합니다.</p>
+        </section>
+      )}
+
       {/* 멤버별 점수 순위 */}
       <section className="card card-padding rounded-2xl">
-        <div className="mb-4">
-          <h2 className="font-semibold text-lg">멤버별 점수 순위 ({currentMonthLabel})</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">멤버별 점수 순위 ({currentMonthLabel})</h2>
         </div>
-        
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -388,37 +446,13 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {(() => {
-                // 점수 계산 (간단한 구현)
-                const scores = members.map(member => {
-                  const memberLogs = wakeupLogs.filter(log => 
-                    log.member_code === member.code &&
-                    new Date(log.date).getFullYear() === selectedDate.getFullYear() &&
-                    new Date(log.date).getMonth() + 1 === selectedDate.getMonth() + 1
-                  );
-                  
-                  const success = memberLogs.filter(log => log.status === 'success').length;
-                  const fail = memberLogs.filter(log => log.status === 'fail').length;
-                  const total = success + fail;
-                  const rate = total === 0 ? 0 : Math.round((success / total) * 100);
-                  
-                  return {
-                    name: member.name,
-                    code: member.code,
-                    score: rate,
-                    success,
-                    fail
-                  };
-                }).sort((a, b) => b.score - a.score);
-                
-                return scores.map((member, index) => (
-                  <tr key={member.name} className={member.name === name ? 'text-red-600 font-semibold' : ''}>
-                    <td className="py-2">{index + 1}위</td>
-                    <td className="py-2 font-medium">{member.name}</td>
-                    <td className="py-2 text-center">{member.score}%</td>
-                  </tr>
-                ));
-              })()}
+              {monthlyScores.map((m, idx) => (
+                <tr key={m.name} className={m.name === name ? 'text-red-600 font-semibold' : ''}>
+                  <td className="py-2">{(m as any).rank}위</td>
+                  <td className="py-2 font-medium">{m.name}</td>
+                  <td className="py-2 text-center">{m.score}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

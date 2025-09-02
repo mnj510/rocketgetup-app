@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getMembers, addMember } from "@/lib/supabase-utils";
+import Link from "next/link";
 
 interface Member {
   id: string;
@@ -88,6 +89,25 @@ export default function AdminPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">관리자 페이지</h1>
         <p className="text-gray-600">멤버 관리 및 시스템 설정</p>
+      </div>
+
+      {/* 관리 메뉴 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <Link href="/admin/must" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
+          <div className="text-center">
+            <div className="text-4xl mb-3">📝</div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">MUST 관리</h3>
+            <p className="text-gray-600">멤버별 MUST 기록 조회 및 관리</p>
+          </div>
+        </Link>
+        
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <div className="text-center">
+            <div className="text-4xl mb-3">👥</div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">멤버 관리</h3>
+            <p className="text-gray-600">새 멤버 추가 및 기존 멤버 관리</p>
+          </div>
+        </div>
       </div>
 
       {/* 멤버 추가 폼 */}

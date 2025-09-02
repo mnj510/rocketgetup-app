@@ -80,6 +80,16 @@ export async function saveMustRecord(memberCode: string, date: string, prioritie
   return data;
 }
 
+export async function deleteMustRecord(recordId: string) {
+  const { error } = await supabaseClient
+    .from('app.must_records')
+    .delete()
+    .eq('id', recordId);
+  
+  if (error) throw error;
+  return true;
+}
+
 // 통계 계산 함수
 export async function getMonthlyStats(memberCode: string, year: number, month: number) {
   const logs = await getWakeupLogs(memberCode, year, month);
