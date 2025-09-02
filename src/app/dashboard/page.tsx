@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getMembers, getMonthlyStats, getWakeupLogs, getMustRecord } from "@/lib/supabase-utils";
 import { supabaseClient } from "@/lib/supabase";
@@ -46,6 +46,11 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [dailyStatuses, setDailyStatuses] = useState<Record<string, DailyStatus>>({});
   const [memberScores, setMemberScores] = useState<MemberScore[]>([]);
+  const [isMonthChanging, setIsMonthChanging] = useState(false);
+
+  // 멤버 데이터 캐싱
+  const [membersCache, setMembersCache] = useState<Member[]>([]);
+  const [statsCache, setStatsCache] = useState<Record<string, MemberStats[]>>({});
 
   useEffect(() => {
     const code = localStorage.getItem("member_code");
@@ -64,7 +69,14 @@ export default function DashboardPage() {
     }
     
     loadDashboardData();
-  }, [router, selectedDate]);
+  }, [router]);
+
+  // 월 변경 시에만 데이터 로드
+  useEffect(() => {
+    if (membersCache.length > 0) {
+      loadMonthData();
+    }
+  }, [selectedDate, membersCache]);
 
   const getMemberName = async (code: string) => {
     try {
@@ -86,20 +98,40 @@ export default function DashboardPage() {
     try {
       setIsLoading(true);
       
-      // 모든 멤버 가져오기
+      // 모든 멤버 가져오기 (한 번만)
       const allMembers = await getMembers();
       setMembers(allMembers);
+      setMembersCache(allMembers);
       
-      // 선택된 월의 데이터 로드
+      // 현재 월 데이터 로드
+      await loadMonthData();
+      
+    } catch (error) {
+      console.error("대시보드 데이터 로드 실패:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMonthData = async () => {
+    try {
+      setIsMonthChanging(true);
+      
       const year = selectedDate.getFullYear();
       const month = selectedDate.getMonth() + 1;
+      const cacheKey = `${year}-${month}`;
+      
+      // 캐시된 데이터가 있으면 사용
+      if (statsCache[cacheKey]) {
+        setMemberStats(statsCache[cacheKey]);
+        calculateMemberScores(statsCache[cacheKey]);
+        return;
+      }
       
       // 각 멤버의 통계 및 점수 계산
       const stats = await Promise.all(
-        allMembers.map(async (member) => {
+        membersCache.map(async (member) => {
           const stats = await getMonthlyStats(member.code, year, month);
-          
-          // 점수 계산: 기상 + MUST + 개구리
           const score = await calculateMemberScore(member.code, year, month);
           
           return {
@@ -112,6 +144,12 @@ export default function DashboardPage() {
       
       setMemberStats(stats);
       
+      // 캐시에 저장
+      setStatsCache(prev => ({
+        ...prev,
+        [cacheKey]: stats
+      }));
+      
       // 일별 상태 로드 (현재 사용자)
       if (memberCode) {
         await loadDailyStatuses(memberCode, year, month);
@@ -121,9 +159,9 @@ export default function DashboardPage() {
       calculateMemberScores(stats);
       
     } catch (error) {
-      console.error("대시보드 데이터 로드 실패:", error);
+      console.error("월별 데이터 로드 실패:", error);
     } finally {
-      setIsLoading(false);
+      setIsMonthChanging(false);
     }
   };
 
@@ -165,7 +203,7 @@ export default function DashboardPage() {
     }
   };
 
-  const calculateMemberScores = (stats: MemberStats[]) => {
+  const calculateMemberScores = useCallback((stats: MemberStats[]) => {
     const scores: MemberScore[] = stats.map(stat => ({
       name: stat.member.name,
       code: stat.member.code,
@@ -189,7 +227,7 @@ export default function DashboardPage() {
     });
     
     setMemberScores(scores);
-  };
+  }, []);
 
   const loadDailyStatuses = async (code: string, year: number, month: number) => {
     try {
@@ -259,6 +297,16 @@ export default function DashboardPage() {
     return null;
   };
 
+  const handleMonthChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const [year, month] = e.target.value.split('-').map(Number);
+    setSelectedDate(new Date(year, month - 1, 1));
+  };
+
+  // 현재 월 정보 계산
+  const currentYear = selectedDate.getFullYear();
+  const currentMonth = selectedDate.getMonth() + 1;
+  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+
   if (isLoading) {
     return (
       <div className="text-center py-8">
@@ -267,10 +315,6 @@ export default function DashboardPage() {
       </div>
     );
   }
-
-  const currentYear = selectedDate.getFullYear();
-  const currentMonth = selectedDate.getMonth() + 1;
-  const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
 
   return (
     <div className="space-y-6">
@@ -284,12 +328,15 @@ export default function DashboardPage() {
             <input
               type="month"
               value={`${currentYear}-${String(currentMonth).padStart(2, '0')}`}
-              onChange={(e) => {
-                const [year, month] = e.target.value.split('-').map(Number);
-                setSelectedDate(new Date(year, month - 1, 1));
-              }}
+              onChange={handleMonthChange}
               className="px-3 py-2 border border-gray-300 rounded-md"
             />
+            {isMonthChanging && (
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                <span>월 변경 중...</span>
+              </div>
+            )}
           </div>
         </div>
         <p className="text-gray-600">
@@ -301,7 +348,7 @@ export default function DashboardPage() {
       {!isAdmin && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">이번 달</h3>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">{getMonthName(currentMonth)}</h3>
             <p className="text-3xl font-bold text-indigo-600">
               {memberStats.find(s => s.member.code === memberCode)?.total || 0}일
             </p>
@@ -379,7 +426,7 @@ export default function DashboardPage() {
           <div className="mt-4 text-sm text-gray-600">
             <span className="inline-block w-4 h-4 bg-blue-500 rounded mr-2"></span> 기상 성공
             <span className="inline-block w-4 h-4 bg-red-500 rounded ml-4 mr-2"></span> 기상 실패
-            <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미래/미완료
+            <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미완료
             <span className="inline-block w-5 h-5 bg-yellow-400 rounded ml-4 mr-2"></span> 일일 점수
           </div>
         </div>
@@ -448,7 +495,7 @@ export default function DashboardPage() {
         <div className="mt-4 text-sm text-gray-600">
           <span className="inline-block w-4 h-4 bg-blue-500 rounded mr-2"></span> 기상 성공
           <span className="inline-block w-4 h-4 bg-red-500 rounded ml-4 mr-2"></span> 기상 실패
-          <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미완료/미래
+          <span className="inline-block w-4 h-4 bg-gray-100 border border-gray-300 rounded ml-4 mr-2"></span> 미완료
         </div>
       </div>
 
