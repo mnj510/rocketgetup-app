@@ -1,55 +1,59 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 interface AppShellProps {
   children: React.ReactNode;
 }
 
-const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean }> = [
-  { href: "/dashboard", label: "대시보드" },
-  { href: "/wakeup", label: "기상 체크" },
-  { href: "/must", label: "MUST 작성", memberOnly: true },
-  { href: "/admin", label: "관리", adminOnly: true },
-];
-
-export function AppShell({ children }: AppShellProps) {
-  const pathname = usePathname();
-  const router = useRouter();
+export default function AppShell({ children }: AppShellProps) {
   const [sideOpen, setSideOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userLabel, setUserLabel] = useState("게스트");
+  const [memberCode, setMemberCode] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const pathname = usePathname();
 
   useEffect(() => {
-    setIsAdmin(localStorage.getItem("is_admin") === "1");
-    const code = localStorage.getItem("member_code");
-    const membersRaw = localStorage.getItem("members");
-    let display = "게스트";
-    if (localStorage.getItem("is_admin") === "1") {
-      display = "관리자";
-    } else if (code) {
-      let name = code;
-      if (membersRaw) {
-        try {
-          const list = JSON.parse(membersRaw) as Array<{ name: string; code: string }>;
-          const found = list.find((m) => m.code === code);
-          if (found) name = found.name;
-        } catch (_) {}
-      }
-      display = name;
+    // localStorage에서 사용자 정보 가져오기
+    const storedIsAdmin = localStorage.getItem("is_admin") === "true";
+    const storedMemberCode = localStorage.getItem("member_code") || "";
+    
+    setIsAdmin(storedIsAdmin);
+    setMemberCode(storedMemberCode);
+
+    // 멤버 이름 가져오기
+    if (storedMemberCode) {
+      getMemberName(storedMemberCode);
     }
-    setUserLabel(display);
   }, []);
 
-  function logout() {
+  const getMemberName = async (code: string) => {
+    try {
+      // Supabase에서 멤버 이름 가져오기
+      const { data, error } = await fetch(`/api/members/${code}`).then(res => res.json());
+      if (!error && data) {
+        setMemberName(data.name);
+      }
+    } catch (error) {
+      console.error("멤버 이름 가져오기 실패:", error);
+    }
+  };
+
+  const handleLogout = () => {
     localStorage.removeItem("is_admin");
     localStorage.removeItem("member_code");
-    router.push("/");
-  }
+    window.location.href = "/login";
+  };
 
-  // 메뉴 필터링: 관리자는 관리 메뉴만, 일반 멤버는 MUST 작성 메뉴 표시
+  const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean }> = [
+    { href: "/dashboard", label: "대시보드" },
+    { href: "/wakeup", label: "기상 체크" },
+    { href: "/must", label: "MUST 작성", memberOnly: true },
+    { href: "/admin", label: "관리", adminOnly: true },
+  ];
+
   const filteredMenuItems = MENU_ITEMS.filter((item) => {
     if (item.adminOnly) return isAdmin;
     if (item.memberOnly) return !isAdmin;
@@ -57,40 +61,69 @@ export function AppShell({ children }: AppShellProps) {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
-          <div />
-          <div className="font-semibold">행동모임 새벽 기상</div>
-          <div className="flex items-center gap-3 text-sm">
-            <span className="text-gray-600">{userLabel}</span>
-            <button onClick={logout} className="rounded bg-rose-500 text-white px-3 py-1">로그아웃</button>
+    <div className="min-h-screen bg-gray-50">
+      {/* 헤더 */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <h1 className="text-xl font-semibold text-gray-900">행동모임 새벽 기상</h1>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                {memberName || memberCode}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              >
+                로그아웃
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 grid grid-cols-[240px_1fr] gap-6">
-        <aside className={`sticky self-start top-[64px] h-[calc(100vh-64px)] w-60 bg-white shadow-md p-4 rounded-xl`}>
-          <nav className="space-y-1">
-            {filteredMenuItems.map((m) => {
-              const active = pathname === m.href;
-              return (
-                <Link key={m.href} href={m.href} className={`block rounded px-3 py-2 ${active ? "bg-indigo-50 text-indigo-700 font-medium" : "hover:bg-gray-100"}`}
-                  onClick={() => setSideOpen(false)}
-                >
-                  {m.label}
-                </Link>
-              );
-            })}
-          </nav>
+      <div className="flex">
+        {/* 사이드바 */}
+        <aside className={`${sideOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0 lg:static lg:inset-0 z-50 lg:z-auto lg:w-64 bg-white shadow-lg lg:shadow-none transition-transform duration-300 ease-in-out lg:transition-none`}>
+          <div className="h-full flex flex-col">
+            <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
+              <nav className="space-y-1">
+                {filteredMenuItems.map((m) => {
+                  const active = pathname === m.href;
+                  return (
+                    <Link key={m.href} href={m.href} className={`block rounded px-3 py-2 ${active ? "bg-indigo-50 text-indigo-700 font-medium" : "hover:bg-gray-100"}`}
+                      onClick={() => setSideOpen(false)}
+                    >
+                      {m.label}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          </div>
         </aside>
 
-        <main className="space-y-6">{children}</main>
+        {/* 메인 콘텐츠 */}
+        <main className="flex-1 lg:ml-64">
+          <div className="py-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              {children}
+            </div>
+          </div>
+        </main>
       </div>
+
+      {/* 모바일 메뉴 버튼 */}
+      <button
+        className="lg:hidden fixed bottom-4 right-4 bg-indigo-600 text-white p-3 rounded-full shadow-lg z-50"
+        onClick={() => setSideOpen(!sideOpen)}
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
     </div>
   );
 }
-
-export default AppShell;
 
 
