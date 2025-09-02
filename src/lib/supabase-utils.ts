@@ -3,7 +3,7 @@ import { supabaseClient } from './supabase';
 // 멤버 관련 함수
 export async function getMembers() {
   const { data, error } = await supabaseClient
-    .from('app.members')
+    .from('members')
     .select('*')
     .order('created_at', { ascending: true });
   
@@ -22,7 +22,7 @@ export async function addMember(code: string, name: string, isAdmin: boolean = f
     
     // 테이블 존재 확인
     const { data: tableCheck, error: tableError } = await supabaseClient
-      .from('app.members')
+      .from('members')
       .select('id')
       .limit(1);
     
@@ -35,7 +35,7 @@ export async function addMember(code: string, name: string, isAdmin: boolean = f
     
     // 멤버 추가
     const { data, error } = await supabaseClient
-      .from('app.members')
+      .from('members')
       .insert([{ 
         code: code.trim(), 
         name: name.trim(), 
@@ -71,7 +71,7 @@ export async function getWakeupLogs(memberCode: string, year: number, month: num
   const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
   
   const { data, error } = await supabaseClient
-    .from('app.wakeup_logs')
+    .from('wakeup_logs')
     .select('*')
     .eq('member_code', memberCode)
     .gte('date', startDate)
@@ -84,7 +84,7 @@ export async function getWakeupLogs(memberCode: string, year: number, month: num
 
 export async function addWakeupLog(memberCode: string, date: string, status: 'success' | 'fail', note?: string) {
   const { data, error } = await supabaseClient
-    .from('app.wakeup_logs')
+    .from('wakeup_logs')
     .upsert([{ member_code: memberCode, date, status, note }], { onConflict: 'member_code,date' })
     .select()
     .single();
@@ -96,7 +96,7 @@ export async function addWakeupLog(memberCode: string, date: string, status: 'su
 // MUST 기록 관련 함수
 export async function getMustRecord(memberCode: string, date: string) {
   const { data, error } = await supabaseClient
-    .from('app.must_records')
+    .from('must_records')
     .select('*')
     .eq('member_code', memberCode)
     .eq('date', date)
@@ -108,7 +108,7 @@ export async function getMustRecord(memberCode: string, date: string) {
 
 export async function saveMustRecord(memberCode: string, date: string, priorities: string[], frogs: string[], retro: string) {
   const { data, error } = await supabaseClient
-    .from('app.must_records')
+    .from('must_records')
     .upsert([{ 
       member_code: memberCode, 
       date, 
@@ -125,7 +125,7 @@ export async function saveMustRecord(memberCode: string, date: string, prioritie
 
 export async function deleteMustRecord(recordId: string) {
   const { error } = await supabaseClient
-    .from('app.must_records')
+    .from('must_records')
     .delete()
     .eq('id', recordId);
   
