@@ -79,9 +79,14 @@ export default function DashboardPage() {
       const stats = await Promise.all(
         allMembers.map(async (member) => {
           const stats = await getMonthlyStats(member.code, currentYear, currentMonth);
+          
+          // 점수 계산: 기상 + MUST + 개구리 (임시로 0점)
+          const score = 0; // TODO: 실제 점수 계산 구현
+          
           return {
             member,
-            ...stats
+            ...stats,
+            score
           };
         })
       );
