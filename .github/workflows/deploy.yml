@@ -30,7 +30,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        working-directory: rocketgetup-app
 
       - name: Create .env
         run: |
@@ -40,16 +39,15 @@ jobs:
           SESSION_PASSWORD=${{ vars.SESSION_PASSWORD }}
           GH_PAGES_BASEPATH=${{ vars.GH_PAGES_BASEPATH }}
           EOF
-        working-directory: rocketgetup-app
+        
 
       - name: Build and export static site
         run: npm run export
-        working-directory: rocketgetup-app
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: rocketgetup-app/out
+          path: out
 
   deploy:
     needs: build
