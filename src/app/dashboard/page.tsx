@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getMembers, getMonthlyStats } from "@/lib/supabase-utils";
+import { getMembers, getMonthlyStats, getWakeupLogs, getMustRecord } from "@/lib/supabase-utils";
 import { supabaseClient } from "@/lib/supabase";
 
 interface Member {
@@ -18,6 +18,14 @@ interface MemberStats {
   fail: number;
   total: number;
   rate: number;
+  score: number;
+}
+
+interface MemberScore {
+  name: string;
+  code: string;
+  score: number;
+  rank: number;
 }
 
 export default function DashboardPage() {
@@ -27,6 +35,7 @@ export default function DashboardPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [memberStats, setMemberStats] = useState<MemberStats[]>([]);
+  const [memberScores, setMemberScores] = useState<MemberScore[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -66,6 +75,70 @@ export default function DashboardPage() {
     }
   };
 
+  const calculateMemberScore = async (code: string, year: number, month: number): Promise<number> => {
+    try {
+      let totalScore = 0;
+      
+      // 해당 월의 일수 계산
+      const daysInMonth = new Date(year, month, 0).getDate();
+      
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // 기상 체크 점수 (04:59까지)
+        const wakeupLogs = await getWakeupLogs(code, year, month);
+        if (wakeupLogs && wakeupLogs.length > 0) {
+          const log = wakeupLogs.find(l => l.date === date);
+          if (log && log.status === 'success') {
+            totalScore += 1;
+          }
+        }
+        
+        // MUST 작성 점수 (23:59까지)
+        const mustRecord = await getMustRecord(code, date);
+        if (mustRecord && mustRecord.priorities && mustRecord.priorities.some((p: string) => p.trim())) {
+          totalScore += 1;
+        }
+        
+        // 개구리 완료 점수 (23:59까지)
+        if (mustRecord && mustRecord.frogs && mustRecord.frogs.some((f: string) => f.trim())) {
+          totalScore += 1;
+        }
+      }
+      
+      return totalScore;
+    } catch (error) {
+      console.error("점수 계산 실패:", error);
+      return 0;
+    }
+  };
+
+  const calculateMemberScores = (stats: MemberStats[]) => {
+    const scores: MemberScore[] = stats.map(stat => ({
+      name: stat.member.name,
+      code: stat.member.code,
+      score: stat.score,
+      rank: 0
+    }));
+    
+    // 점수별로 정렬
+    scores.sort((a, b) => b.score - a.score);
+    
+    // 동일 점수는 같은 순위로 설정
+    let currentRank = 1;
+    let prevScore = -1;
+    
+    scores.forEach((score, index) => {
+      if (score.score !== prevScore) {
+        currentRank = index + 1;
+      }
+      score.rank = currentRank;
+      prevScore = score.score;
+    });
+    
+    setMemberScores(scores);
+  };
+
   const loadDashboardData = async () => {
     try {
       setIsLoading(true);
@@ -74,18 +147,24 @@ export default function DashboardPage() {
       const allMembers = await getMembers();
       setMembers(allMembers);
       
-      // 각 멤버의 통계 가져오기
+      // 각 멤버의 통계 및 점수 계산
       const stats = await Promise.all(
         allMembers.map(async (member) => {
           const stats = await getMonthlyStats(member.code, currentYear, currentMonth);
+          const score = await calculateMemberScore(member.code, currentYear, currentMonth);
+          
           return {
             member,
-            ...stats
+            ...stats,
+            score
           };
         })
       );
       
       setMemberStats(stats);
+      
+      // 멤버별 점수 순위 계산
+      calculateMemberScores(stats);
       
     } catch (error) {
       console.error("대시보드 데이터 로드 실패:", error);
@@ -125,7 +204,7 @@ export default function DashboardPage() {
 
       {/* 통계 카드 (멤버만) */}
       {!isAdmin && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-lg shadow p-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-2">{getMonthName(currentMonth)}</h3>
             <p className="text-3xl font-bold text-indigo-600">
@@ -144,6 +223,13 @@ export default function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-800 mb-2">기상률</h3>
             <p className="text-3xl font-bold text-blue-600">
               {memberStats.find(s => s.member.code === memberCode)?.rate || 0}%
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">총 점수</h3>
+            <p className="text-3xl font-bold text-purple-600">
+              {memberStats.find(s => s.member.code === memberCode)?.score || 0}점
             </p>
           </div>
         </div>
@@ -172,6 +258,9 @@ export default function DashboardPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   기상률
                 </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  총 점수
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -190,10 +279,48 @@ export default function DashboardPage() {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {stat.rate}%
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-purple-600">
+                    {stat.score}점
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* 멤버별 점수 순위 */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h2 className="text-lg font-semibold text-gray-800 mb-4">
+          멤버별 점수 순위 ({currentYear}년 {getMonthName(currentMonth)})
+        </h2>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className="w-20 text-left">순위</th>
+                <th className="text-left">멤버</th>
+                <th className="w-24 text-center">점수</th>
+              </tr>
+            </thead>
+            <tbody>
+              {memberScores.map((member) => (
+                <tr key={member.code} className={member.code === memberCode ? 'text-blue-600 font-semibold' : ''}>
+                  <td className="py-2">{member.rank}위</td>
+                  <td className="py-2 font-medium">
+                    {member.name}
+                    {member.code === memberCode && <span className="ml-2 text-blue-600">(나)</span>}
+                  </td>
+                  <td className="py-2 text-center font-bold">{member.score}점</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        
+        <div className="mt-4 text-sm text-gray-600">
+          <span className="text-blue-600">파란색</span>으로 표시된 멤버는 현재 로그인한 사용자입니다.
         </div>
       </div>
     </div>

@@ -59,6 +59,7 @@ export default function AppShell({ children }: AppShellProps) {
     { href: "/wakeup", label: "기상 체크", memberOnly: true },
     { href: "/must", label: "MUST 작성", memberOnly: true },
     { href: "/admin", label: "멤버 추가", adminOnly: true },
+    { href: "/admin/wakeup", label: "기상 체크", adminOnly: true },
     { href: "/admin/must", label: "MUST 관리", adminOnly: true },
   ];
 
