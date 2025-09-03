@@ -290,15 +290,30 @@ export async function deleteMustRecord(recordId: string) {
 export async function getMonthlyStats(memberCode: string, year: number, month: number) {
   try {
     const logs = await getWakeupLogs(memberCode, year, month);
-    const success = logs.filter(log => log.status === 'success').length;
-    const fail = logs.filter(log => log.status === 'fail').length;
+    const success = logs.filter(log => log.wakeup_status === 'success').length;
+    const fail = logs.filter(log => log.wakeup_status === 'fail').length;
     const total = success + fail;
     const rate = total === 0 ? 0 : Math.round((success / total) * 100);
     
-    return { success, fail, total, rate };
+    // MUST 기록도 함께 가져오기
+    const mustRecords = [];
+    const daysInMonth = new Date(year, month, 0).getDate();
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const mustRecord = await getMustRecord(memberCode, date);
+      if (mustRecord) {
+        mustRecords.push({
+          ...mustRecord,
+          completed: mustRecord.priorities && mustRecord.priorities.some((p: string) => p.trim())
+        });
+      }
+    }
+    
+    return { success, fail, total, rate, logs, mustRecords };
   } catch (error) {
     console.error("❌ getMonthlyStats 실패:", error);
-    return { success: 0, fail: 0, total: 0, rate: 0 };
+    return { success: 0, fail: 0, total: 0, rate: 0, logs: [], mustRecords: [] };
   }
 }
 

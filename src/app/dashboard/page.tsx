@@ -80,15 +80,29 @@ export default function DashboardPage() {
         allMembers.map(async (member) => {
           const stats = await getMonthlyStats(member.code, currentYear, currentMonth);
           
-          // 점수 계산: 기상 + MUST + 개구리 (임시로 0점)
-          const score = 0; // TODO: 실제 점수 계산 구현
+          // 점수 계산 함수
+          const calculateScore = (logs: any[], mustRecords: any[]) => {
+            let score = 0;
+            
+            // 기상 완료: 1점
+            const wakeupSuccess = logs.filter(log => log.wakeup_status === "success").length;
+            score += wakeupSuccess;
+            
+            // 개구리 잡기 완료: 1점
+            const frogCompleted = logs.filter(log => log.frog_status === "completed").length;
+            score += frogCompleted;
+            
+            // MUST 작성: 1점 (기존 로직 유지)
+            const mustCompleted = mustRecords.filter(record => record.completed).length;
+            score += mustCompleted;
+            
+            return score;
+          };
           
           return {
             member,
             ...stats,
-            score,
-            logs: [], // 임시 빈 배열
-            mustRecords: [] // 임시 빈 배열
+            score: calculateScore(stats.logs, stats.mustRecords)
           };
         })
       );

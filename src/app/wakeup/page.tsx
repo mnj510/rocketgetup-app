@@ -72,7 +72,6 @@ export default function WakeupPage() {
   const canCompleteWakeup = () => {
     const now = currentTime;
     const hour = now.getHours();
-    const minute = now.getMinutes();
     
     // 00:00 ~ 04:59까지만 기상 완료 가능
     return hour >= 0 && hour < 5;
@@ -222,7 +221,7 @@ export default function WakeupPage() {
         {/* 멤버 정보 */}
         <div className="bg-white rounded-lg shadow-sm border p-6 mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">멤버 정보</h2>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">멤버 코드</label>
               <div className="text-lg font-mono text-gray-900">{memberCode}</div>
