@@ -96,6 +96,94 @@ export default function AdminPage() {
     }
   };
 
+  const handleDeleteMember = async (memberId: string, memberName: string) => {
+    // 이중 확인 절차
+    const firstConfirm = confirm(`정말로 "${memberName}" 멤버를 삭제하시겠습니까?\n\n⚠️ 주의: 이 작업은 되돌릴 수 없습니다!`);
+    if (!firstConfirm) return;
+    
+    const secondConfirm = confirm(`최종 확인: "${memberName}" 멤버를 영구적으로 삭제하시겠습니까?\n\n이 멤버의 모든 데이터(기상 기록, MUST 기록, 점수 등)가 함께 삭제됩니다.`);
+    if (!secondConfirm) return;
+    
+    try {
+      setLoading(true);
+      
+      // 1. 멤버의 모든 관련 데이터 삭제
+      console.log(`🔧 ${memberName} 멤버 삭제 시작...`);
+      
+      const memberCode = members.find(m => m.id === memberId)?.code;
+      if (!memberCode) {
+        throw new Error("멤버 코드를 찾을 수 없습니다.");
+      }
+      
+      // 1-1. 기상 기록 삭제
+      const { error: wakeupError } = await supabaseClient
+        .from('wakeup_logs')
+        .delete()
+        .eq('member_code', memberCode);
+      
+      if (wakeupError) {
+        console.error("기상 기록 삭제 실패:", wakeupError);
+        throw new Error(`기상 기록 삭제 실패: ${wakeupError.message}`);
+      }
+      console.log("✅ 기상 기록 삭제 완료");
+      
+      // 1-2. MUST 기록 삭제
+      const { error: mustError } = await supabaseClient
+        .from('must_records')
+        .delete()
+        .eq('member_code', memberCode);
+      
+      if (mustError) {
+        console.error("MUST 기록 삭제 실패:", mustError);
+        throw new Error(`MUST 기록 삭제 실패: ${mustError.message}`);
+      }
+      console.log("✅ MUST 기록 삭제 완료");
+      
+      // 1-3. 모바일 로그인 코드 삭제
+      const { error: mobileError } = await supabaseClient
+        .from('mobile_login_codes')
+        .delete()
+        .eq('member_code', memberCode);
+      
+      if (mobileError) {
+        console.error("모바일 로그인 코드 삭제 실패:", mobileError);
+        // 모바일 코드 삭제 실패는 치명적이지 않으므로 경고만 표시
+        console.warn("⚠️ 모바일 로그인 코드 삭제 실패 (무시됨)");
+      } else {
+        console.log("✅ 모바일 로그인 코드 삭제 완료");
+      }
+      
+      // 2. 마지막으로 멤버 정보 삭제
+      const { error: memberError } = await supabaseClient
+        .from('members')
+        .delete()
+        .eq('id', memberId);
+      
+      if (memberError) {
+        console.error("멤버 정보 삭제 실패:", memberError);
+        throw new Error(`멤버 정보 삭제 실패: ${memberError.message}`);
+      }
+      console.log("✅ 멤버 정보 삭제 완료");
+      
+      setMessage(`"${memberName}" 멤버와 모든 관련 데이터가 성공적으로 삭제되었습니다.`);
+      
+      // 3. 멤버 목록 새로고침
+      await loadMembers();
+      
+      // 4. 성공 메시지 5초 후 제거
+      setTimeout(() => setMessage(""), 5000);
+      
+    } catch (error: any) {
+      console.error("멤버 삭제 실패:", error);
+      setMessage(`❌ 멤버 삭제 실패: ${error.message || '알 수 없는 오류'}`);
+      
+      // 에러 메시지 10초 후 제거
+      setTimeout(() => setMessage(""), 10000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -260,6 +348,9 @@ export default function AdminPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     가입일
                   </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    작업
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -282,6 +373,17 @@ export default function AdminPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(member.created_at).toLocaleDateString("ko-KR")}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {!member.is_admin && (
+                        <button
+                          onClick={() => handleDeleteMember(member.id, member.name)}
+                          disabled={loading}
+                          className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50 px-3 py-1 rounded border border-red-200 hover:bg-red-50"
+                        >
+                          삭제
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
