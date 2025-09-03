@@ -184,18 +184,49 @@ export async function getWakeupLogs(memberCode: string, year: number, month: num
   }
 }
 
-export async function addWakeupLog(memberCode: string, date: string, status: 'success' | 'fail', note?: string) {
+export async function addWakeupLog(
+  memberCode: string,
+  date: string,
+  wakeupStatus: "success" | "fail",
+  frogStatus: "completed" | "not_completed",
+  wakeupTime?: string,
+  frogTime?: string,
+  note?: string
+): Promise<void> {
   try {
-    const { data, error } = await supabaseClient
+    console.log("🔧 기상 로그 추가 시작:", {
+      memberCode,
+      date,
+      wakeupStatus,
+      frogStatus,
+      wakeupTime,
+      frogTime,
+      note
+    });
+
+    const { error } = await supabaseClient
       .from('wakeup_logs')
-      .upsert([{ member_code: memberCode, date, status, note }], { onConflict: 'member_code,date' })
-      .select()
-      .single();
-    
-    if (error) throw error;
-    return data;
+      .upsert({
+        member_code: memberCode,
+        date: date,
+        wakeup_status: wakeupStatus,
+        frog_status: frogStatus,
+        wakeup_time: wakeupTime,
+        frog_time: frogTime,
+        note: note,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'member_code,date'
+      });
+
+    if (error) {
+      console.error("❌ 기상 로그 추가 실패:", error);
+      throw new Error(`기상 로그 추가 실패: ${error.message}`);
+    }
+
+    console.log("✅ 기상 로그 추가 성공");
   } catch (error) {
-    console.error("❌ addWakeupLog 실패:", error);
+    console.error("❌ 기상 로그 추가 중 오류:", error);
     throw error;
   }
 }
