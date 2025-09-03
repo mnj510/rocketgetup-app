@@ -91,6 +91,77 @@ export async function addMember(code: string, name: string, isAdmin: boolean = f
   }
 }
 
+export async function generateMobileLoginCode(memberCode: string): Promise<string> {
+  try {
+    console.log("🔧 모바일 로그인 코드 생성 시작:", { memberCode });
+    
+    // 6자리 랜덤 코드 생성
+    const mobileCode = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Supabase에 모바일 로그인 코드 저장 (24시간 유효)
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+    
+    const { error } = await supabaseClient
+      .from('mobile_login_codes')
+      .upsert({
+        member_code: memberCode,
+        mobile_code: mobileCode,
+        expires_at: expiresAt.toISOString(),
+        created_at: new Date().toISOString()
+      }, {
+        onConflict: 'member_code'
+      });
+    
+    if (error) {
+      console.error("❌ 모바일 로그인 코드 저장 실패:", error);
+      throw error;
+    }
+    
+    console.log("✅ 모바일 로그인 코드 생성 성공:", mobileCode);
+    return mobileCode;
+  } catch (error) {
+    console.error("❌ 모바일 로그인 코드 생성 실패:", error);
+    throw error;
+  }
+}
+
+export async function verifyMobileLoginCode(mobileCode: string): Promise<{ success: boolean; memberCode?: string; memberName?: string; error?: string }> {
+  try {
+    console.log("🔧 모바일 로그인 코드 검증 시작:", { mobileCode });
+    
+    const { data, error } = await supabaseClient
+      .from('mobile_login_codes')
+      .select('member_code, member_name, expires_at')
+      .eq('mobile_code', mobileCode)
+      .single();
+    
+    if (error) {
+      console.error("❌ 모바일 로그인 코드 검증 오류:", error);
+      throw error;
+    }
+
+    if (!data) {
+      console.log("❌ 모바일 로그인 코드 검증 실패: 코드를 찾을 수 없습니다.");
+      return { success: false, error: "코드를 찾을 수 없습니다." };
+    }
+
+    const now = new Date();
+    const expiresAt = new Date(data.expires_at);
+
+    if (now > expiresAt) {
+      console.log("❌ 모바일 로그인 코드 검증 실패: 코드가 만료되었습니다.");
+      return { success: false, error: "코드가 만료되었습니다." };
+    }
+
+    console.log("✅ 모바일 로그인 코드 검증 성공:", data);
+    return { success: true, memberCode: data.member_code, memberName: data.member_name };
+  } catch (error) {
+    console.error("❌ verifyMobileLoginCode 함수 오류:", error);
+    throw error;
+  }
+}
+
 // 기상 기록 관련 함수
 export async function getWakeupLogs(memberCode: string, year: number, month: number) {
   try {
@@ -132,32 +203,14 @@ export async function addWakeupLog(memberCode: string, date: string, status: 'su
 // MUST 기록 관련 함수
 export async function getMustRecord(memberCode: string, date: string) {
   try {
-    console.log("🔧 getMustRecord 시작:", { memberCode, date });
-    
-    // memberCode가 비어있으면 null 반환
-    if (!memberCode || !memberCode.trim()) {
-      console.log("⚠️ memberCode가 비어있음");
-      return null;
-    }
-    
     const { data, error } = await supabaseClient
       .from('must_records')
       .select('*')
-      .eq('member_code', memberCode.trim())
+      .eq('member_code', memberCode)
       .eq('date', date)
       .single();
     
-    if (error) {
-      if (error.code === 'PGRST116') {
-        // 데이터가 없는 경우 (정상적인 상황)
-        console.log("✅ getMustRecord: 해당 날짜에 MUST 기록 없음");
-        return null;
-      }
-      console.error("❌ getMustRecord 에러:", error);
-      throw error;
-    }
-    
-    console.log("✅ getMustRecord 성공:", data);
+    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
     return data;
   } catch (error) {
     console.error("❌ getMustRecord 실패:", error);

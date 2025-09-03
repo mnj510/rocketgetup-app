@@ -38,8 +38,7 @@ export default function LoginPage() {
       if (adminId.trim() !== validId || adminPw !== validPw) {
         throw new Error("관리자 아이디 또는 비밀번호가 올바르지 않습니다");
       }
-      localStorage.setItem("is_admin", "true");
-      localStorage.removeItem("member_code");
+      localStorage.setItem("is_admin", "1");
       router.push("/dashboard");
     } catch (err: any) {
       setError(err.message ?? "관리자 로그인 실패");
@@ -120,6 +119,26 @@ export default function LoginPage() {
             </button>
           </form>
         )}
+      </div>
+
+      {/* 안내 */}
+      <div className="mt-6 p-4 bg-blue-50 rounded-md">
+        <h3 className="text-sm font-medium text-blue-800 mb-2">💡 로그인 안내</h3>
+        <ul className="text-sm text-blue-700 space-y-1">
+          <li>• 관리자: mnj510 / asdf6014!!</li>
+          <li>• 일반 멤버: 관리자에게 코드를 요청하세요</li>
+          <li>• 모든 데이터는 Supabase에 안전하게 저장됩니다</li>
+        </ul>
+      </div>
+
+      {/* 모바일 로그인 링크 */}
+      <div className="mt-6 text-center">
+        <a
+          href="/mobile-login"
+          className="text-sm text-indigo-600 hover:text-indigo-500"
+        >
+          📱 모바일 로그인으로 이동
+        </a>
       </div>
 
       {error && <p className="text-red-600 text-sm mt-4 text-center">{error}</p>}

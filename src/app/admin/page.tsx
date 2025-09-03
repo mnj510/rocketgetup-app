@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getMembers, addMember } from "@/lib/supabase-utils";
+import { getMembers, addMember, generateMobileLoginCode } from "@/lib/supabase-utils";
 import { supabaseClient } from "@/lib/supabase";
 import Link from "next/link";
 
@@ -20,11 +20,13 @@ export default function AdminPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [mobileCodeMessage, setMobileCodeMessage] = useState("");
+  const [selectedMemberForMobile, setSelectedMemberForMobile] = useState("");
 
   useEffect(() => {
     // 관리자 권한 확인
     if (typeof window !== "undefined") {
-      const admin = localStorage.getItem("is_admin") === "true";
+      const admin = localStorage.getItem("is_admin") === "1";
       setIsAdmin(admin);
       if (!admin) {
         window.location.href = "/dashboard";
@@ -74,27 +76,21 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteMember = async (memberId: string, memberName: string) => {
-    if (!confirm(`정말로 "${memberName}" 멤버를 삭제하시겠습니까?`)) {
-      return;
-    }
-
+  const handleGenerateMobileCode = async (memberCode: string) => {
     try {
       setLoading(true);
-      const { error } = await supabaseClient
-        .from('members')
-        .delete()
-        .eq('id', memberId);
+      setMobileCodeMessage("");
+
+      const mobileCode = await generateMobileLoginCode(memberCode);
       
-      if (error) {
-        throw error;
-      }
+      setMobileCodeMessage(`✅ 모바일 로그인 코드가 생성되었습니다: ${mobileCode}`);
       
-      setMessage(`"${memberName}" 멤버가 삭제되었습니다.`);
-      await loadMembers(); // 목록 새로고침
+      // 10초 후 메시지 제거
+      setTimeout(() => setMobileCodeMessage(""), 10000);
+      
     } catch (error: any) {
-      console.error("멤버 삭제 실패:", error);
-      setMessage("멤버 삭제에 실패했습니다.");
+      console.error("모바일 로그인 코드 생성 실패:", error);
+      setMobileCodeMessage(`❌ 코드 생성 실패: ${error.message || '알 수 없는 오류'}`);
     } finally {
       setLoading(false);
     }
@@ -114,8 +110,8 @@ export default function AdminPage() {
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">멤버 관리</h1>
-        <p className="text-gray-600">새 멤버 추가 및 기존 멤버 관리</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">관리자 페이지</h1>
+        <p className="text-gray-600">멤버 관리 및 시스템 설정</p>
       </div>
 
       {/* 관리 메뉴 */}
@@ -189,6 +185,54 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* 모바일 로그인 코드 생성 섹션 */}
+      <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">모바일 로그인 코드 생성</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              멤버 선택
+            </label>
+            <select
+              value={selectedMemberForMobile}
+              onChange={(e) => setSelectedMemberForMobile(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">멤버를 선택하세요</option>
+              {members.filter(member => !member.is_admin).map((member) => (
+                <option key={member.id} value={member.code}>
+                  {member.name} ({member.code})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <button
+              onClick={() => handleGenerateMobileCode(selectedMemberForMobile)}
+              disabled={!selectedMemberForMobile || loading}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md transition-colors"
+            >
+              {loading ? "생성 중..." : "모바일 코드 생성"}
+            </button>
+          </div>
+          <div className="text-sm text-gray-600">
+            <p>• 6자리 랜덤 코드 생성</p>
+            <p>• 24시간 동안 유효</p>
+          </div>
+        </div>
+        
+        {/* 모바일 코드 메시지 */}
+        {mobileCodeMessage && (
+          <div className={`mt-4 p-3 rounded-md text-center font-mono text-lg ${
+            mobileCodeMessage.includes("✅") 
+              ? "bg-green-100 text-green-800 border-2 border-green-300" 
+              : "bg-red-100 text-red-800"
+          }`}>
+            {mobileCodeMessage}
+          </div>
+        )}
+      </div>
+
       {/* 멤버 목록 */}
       <div className="bg-white rounded-lg shadow-sm border">
         <div className="px-6 py-4 border-b border-gray-200">
@@ -216,9 +260,6 @@ export default function AdminPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     가입일
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    작업
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -241,17 +282,6 @@ export default function AdminPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(member.created_at).toLocaleDateString("ko-KR")}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {!member.is_admin && (
-                        <button
-                          onClick={() => handleDeleteMember(member.id, member.name)}
-                          disabled={loading}
-                          className="text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
-                        >
-                          삭제
-                        </button>
-                      )}
                     </td>
                   </tr>
                 ))}
