@@ -84,38 +84,11 @@ export default function AdminWakeupPage() {
       setIsLoading(true);
       setMessage("");
 
-      // 기존 기록이 있는지 확인
-      const existingLog = wakeupLogs.find(log => log.date === selectedDate);
+      // upsert 방식으로 저장 (기존 기록이 있으면 업데이트, 없으면 추가)
+      await addWakeupLog(selectedMember, selectedDate, selectedStatus, note);
       
-      if (existingLog) {
-        // 기존 기록 업데이트
-        const { error } = await supabaseClient
-          .from('wakeup_logs')
-          .update({
-            status: selectedStatus,
-            note: note || null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingLog.id);
-        
-        if (error) throw error;
-        setMessage("기상 상태가 성공적으로 업데이트되었습니다.");
-      } else {
-        // 새 기록 추가
-        const { error } = await supabaseClient
-          .from('wakeup_logs')
-          .insert({
-            member_code: selectedMember,
-            date: selectedDate,
-            status: selectedStatus,
-            note: note || null,
-            created_at: new Date().toISOString()
-          });
-        
-        if (error) throw error;
-        setMessage("기상 상태가 성공적으로 저장되었습니다.");
-      }
-
+      setMessage("기상 상태가 성공적으로 저장되었습니다!");
+      
       // 폼 초기화
       setNote("");
       
@@ -127,7 +100,21 @@ export default function AdminWakeupPage() {
       
     } catch (error: any) {
       console.error("기상 상태 저장 실패:", error);
-      setMessage(`저장에 실패했습니다: ${error.message || '알 수 없는 오류'}`);
+      
+      // 구체적인 에러 메시지 표시
+      let errorMessage = "저장에 실패했습니다.";
+      
+      if (error.message) {
+        if (error.message.includes("duplicate key")) {
+          errorMessage = "이미 해당 날짜에 기상 기록이 존재합니다. 기존 기록을 업데이트합니다.";
+        } else if (error.message.includes("unique constraint")) {
+          errorMessage = "중복된 기록입니다. 기존 기록을 업데이트합니다.";
+        } else {
+          errorMessage = `저장 실패: ${error.message}`;
+        }
+      }
+      
+      setMessage(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -288,6 +275,7 @@ export default function AdminWakeupPage() {
           <li>• 기상 상태를 변경하면 해당 멤버의 점수가 자동으로 반영됩니다.</li>
           <li>• 성공: 1점 추가, 실패: 0점</li>
           <li>• 저장된 기록은 대시보드의 달력과 점수 계산에 즉시 반영됩니다.</li>
+          <li>• 기존 기록이 있으면 자동으로 업데이트됩니다.</li>
         </ul>
       </div>
     </div>

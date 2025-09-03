@@ -132,14 +132,32 @@ export async function addWakeupLog(memberCode: string, date: string, status: 'su
 // MUST 기록 관련 함수
 export async function getMustRecord(memberCode: string, date: string) {
   try {
+    console.log("🔧 getMustRecord 시작:", { memberCode, date });
+    
+    // memberCode가 비어있으면 null 반환
+    if (!memberCode || !memberCode.trim()) {
+      console.log("⚠️ memberCode가 비어있음");
+      return null;
+    }
+    
     const { data, error } = await supabaseClient
       .from('must_records')
       .select('*')
-      .eq('member_code', memberCode)
+      .eq('member_code', memberCode.trim())
       .eq('date', date)
       .single();
     
-    if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows returned
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // 데이터가 없는 경우 (정상적인 상황)
+        console.log("✅ getMustRecord: 해당 날짜에 MUST 기록 없음");
+        return null;
+      }
+      console.error("❌ getMustRecord 에러:", error);
+      throw error;
+    }
+    
+    console.log("✅ getMustRecord 성공:", data);
     return data;
   } catch (error) {
     console.error("❌ getMustRecord 실패:", error);
