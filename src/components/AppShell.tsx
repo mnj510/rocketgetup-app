@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase";
 
 interface AppShellProps {
@@ -12,38 +12,27 @@ interface AppShellProps {
 export default function AppShell({ children }: AppShellProps) {
   const [sideOpen, setSideOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [memberName, setMemberName] = useState("");
   const [memberCode, setMemberCode] = useState("");
-  const [isMobile, setIsMobile] = useState(false);
+  const [memberName, setMemberName] = useState("");
   const pathname = usePathname();
-  const router = useRouter();
 
   useEffect(() => {
-    // 모바일 감지
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
-    };
+    // localStorage에서 사용자 정보 가져오기
+    const storedIsAdmin = localStorage.getItem("is_admin") === "true";
+    const storedMemberCode = localStorage.getItem("member_code") || "";
     
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    setIsAdmin(storedIsAdmin);
+    setMemberCode(storedMemberCode);
 
-  useEffect(() => {
-    const admin = localStorage.getItem("is_admin") === "true";
-    const code = localStorage.getItem("member_code");
-    
-    setIsAdmin(admin);
-    setMemberCode(code || "");
-    
-    if (code) {
-      getMemberName(code);
+    // 멤버 이름 가져오기
+    if (storedMemberCode) {
+      getMemberName(storedMemberCode);
     }
   }, []);
 
   const getMemberName = async (code: string) => {
     try {
+      // Supabase에서 직접 멤버 이름 가져오기
       const { data, error } = await supabaseClient
         .from('members')
         .select('name')
@@ -61,16 +50,16 @@ export default function AppShell({ children }: AppShellProps) {
   const handleLogout = () => {
     localStorage.removeItem("is_admin");
     localStorage.removeItem("member_code");
-    router.push("/login");
+    window.location.href = "/login";
   };
 
-  const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean }> = [
-    { href: "/dashboard", label: "대시보드" },
-    { href: "/wakeup", label: "기상 체크", memberOnly: true },
-    { href: "/must", label: "MUST 작성", memberOnly: true },
-    { href: "/admin", label: "멤버 추가", adminOnly: true },
-    { href: "/admin/wakeup", label: "기상 체크", adminOnly: true },
-    { href: "/admin/must", label: "MUST 관리", adminOnly: true },
+  const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean; icon?: string }> = [
+    { href: "/dashboard", label: "대시보드", icon: "📊" },
+    { href: "/wakeup", label: "기상 체크", memberOnly: true, icon: "⏰" },
+    { href: "/must", label: "MUST 작성", memberOnly: true, icon: "📝" },
+    { href: "/admin", label: "멤버 추가", adminOnly: true, icon: "👥" },
+    { href: "/admin/wakeup", label: "기상 체크", adminOnly: true, icon: "⏰" },
+    { href: "/admin/must", label: "MUST 관리", adminOnly: true, icon: "📝" },
   ];
 
   const filteredMenuItems = MENU_ITEMS.filter(item => {
@@ -80,6 +69,8 @@ export default function AppShell({ children }: AppShellProps) {
   });
 
   // 모바일에서는 상단 메뉴, PC에서는 좌측 메뉴
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024; // 1024px 미만을 모바일로 간주
+
   if (isMobile) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -104,7 +95,7 @@ export default function AppShell({ children }: AppShellProps) {
                 </span>
                 <button
                   onClick={handleLogout}
-                  className="text-red-600 hover:text-red-800 font-medium text-sm"
+                  className="text-red-600 hover:text-red-800 font-medium text-sm px-2 py-1 rounded border border-red-200 hover:bg-red-50"
                 >
                   로그아웃
                 </button>
@@ -114,22 +105,28 @@ export default function AppShell({ children }: AppShellProps) {
 
           {/* 모바일 상단 메뉴 */}
           <div className={`px-4 pb-3 ${sideOpen ? 'block' : 'hidden'}`}>
-            <nav className="flex flex-wrap gap-2">
+            <nav className="grid grid-cols-2 gap-2">
               {filteredMenuItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`p-3 rounded-md text-sm font-medium transition-colors text-center ${
                     pathname === item.href
-                      ? "bg-indigo-100 text-indigo-700"
-                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      ? "bg-indigo-100 text-indigo-700 border-2 border-indigo-300"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100 border border-gray-200"
                   }`}
                   onClick={() => setSideOpen(false)}
                 >
-                  {item.label}
+                  <div className="text-lg mb-1">{item.icon}</div>
+                  <div>{item.label}</div>
                 </Link>
               ))}
             </nav>
+            
+            {/* 모바일 메뉴 안내 */}
+            <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600 text-center">
+              {isAdmin ? "관리자 모드: 모든 기능 사용 가능" : "멤버 모드: 기본 기능 사용"}
+            </div>
           </div>
         </header>
 
@@ -141,7 +138,7 @@ export default function AppShell({ children }: AppShellProps) {
     );
   }
 
-  // PC 레이아웃 (기존과 동일)
+  // PC 레이아웃
   return (
     <div className="min-h-screen bg-gray-50">
       {/* PC 헤더 */}
