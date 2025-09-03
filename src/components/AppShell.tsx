@@ -51,7 +51,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const handleLogout = () => {
     localStorage.removeItem("member_code");
     localStorage.removeItem("is_admin");
-    window.location.href = "/login";
+    // 404 오류 방지를 위해 절대 경로 사용
+    window.location.href = "/";
   };
 
   const MENU_ITEMS: Array<{ href: string; label: string; adminOnly?: boolean; memberOnly?: boolean; icon?: string }> = [
