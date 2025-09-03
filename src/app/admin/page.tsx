@@ -26,7 +26,7 @@ export default function AdminPage() {
   useEffect(() => {
     // 관리자 권한 확인
     if (typeof window !== "undefined") {
-      const admin = localStorage.getItem("is_admin") === "1";
+      const admin = localStorage.getItem("is_admin") === "true";
       setIsAdmin(admin);
       if (!admin) {
         window.location.href = "/dashboard";
@@ -43,7 +43,7 @@ export default function AdminPage() {
       const data = await getMembers();
       setMembers(data);
     } catch (error) {
-      console.error("멤버 로딩 실패:", error);
+      console.error("멤버 로드 실패:", error);
       setMessage("멤버 목록을 불러오는데 실패했습니다.");
     } finally {
       setLoading(false);
@@ -66,11 +66,7 @@ export default function AdminPage() {
       await loadMembers(); // 목록 새로고침
     } catch (error: any) {
       console.error("멤버 추가 실패:", error);
-      if (error.code === "23505") {
-        setMessage("이미 존재하는 코드입니다.");
-      } else {
-        setMessage("멤버 추가에 실패했습니다.");
-      }
+      setMessage("멤버 추가에 실패했습니다.");
     } finally {
       setLoading(false);
     }
@@ -185,14 +181,7 @@ export default function AdminPage() {
   };
 
   if (!isAdmin) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-xl font-semibold text-gray-700 mb-2">접근 권한이 없습니다</div>
-          <div className="text-gray-500">관리자만 접근할 수 있습니다.</div>
-        </div>
-      </div>
-    );
+    return <div>접근 권한이 없습니다.</div>;
   }
 
   return (
@@ -212,13 +201,13 @@ export default function AdminPage() {
           </div>
         </Link>
         
-        <div className="bg-white rounded-lg shadow-sm border p-6">
+        <Link href="/admin/wakeup" className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
           <div className="text-center">
-            <div className="text-4xl mb-3">👥</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">멤버 관리</h3>
-            <p className="text-gray-600">새 멤버 추가 및 기존 멤버 관리</p>
+            <div className="text-4xl mb-3">⏰</div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">기상 체크</h3>
+            <p className="text-gray-600">멤버별 수동 기상 상태 관리</p>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* 멤버 추가 폼 */}
