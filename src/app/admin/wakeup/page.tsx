@@ -15,7 +15,8 @@ interface WakeupLog {
   id: string;
   member_code: string;
   date: string;
-  status: 'success' | 'fail';
+  wakeup_status: 'success' | 'fail';
+  frog_status: 'completed' | 'not_completed';
   note?: string;
   created_at: string;
 }
@@ -85,7 +86,15 @@ export default function AdminWakeupPage() {
       setMessage("");
 
       // upsert 방식으로 저장 (기존 기록이 있으면 업데이트, 없으면 추가)
-      await addWakeupLog(selectedMember, selectedDate, selectedStatus, note);
+      await addWakeupLog(
+        selectedMember, 
+        selectedDate, 
+        selectedStatus, 
+        "not_completed", // 개구리 상태는 기본값으로 설정
+        undefined, // 기상 시간은 설정하지 않음
+        undefined, // 개구리 시간은 설정하지 않음
+        note
+      );
       
       setMessage("기상 상태가 성공적으로 저장되었습니다!");
       
@@ -239,11 +248,11 @@ export default function AdminWakeupPage() {
                 <div>
                   <span className="text-sm font-medium text-gray-500">상태:</span>
                   <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
-                    getCurrentLog()?.status === 'success' 
+                    getCurrentLog()?.wakeup_status === 'success' 
                       ? 'bg-green-100 text-green-800' 
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {getCurrentLog()?.status === 'success' ? '성공' : '실패'}
+                    {getCurrentLog()?.wakeup_status === 'success' ? '성공' : '실패'}
                   </span>
                 </div>
                 <div>
